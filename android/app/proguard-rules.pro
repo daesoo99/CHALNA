@@ -8,3 +8,31 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 # Add any project specific keep options here:
+
+# React Native
+-keep class com.facebook.react.** { *; }
+-keep class com.facebook.jni.** { *; }
+-keep class com.facebook.hermes.** { *; }
+
+# AsyncStorage
+-keep class com.reactnativecommunity.asyncstorage.** { *; }
+
+# React Native Community packages
+-keep class com.reactnativecommunity.** { *; }
+
+# Date Time Picker
+-keep class com.reactcommunity.** { *; }
+
+# Push Notifications
+-keep class com.dieam.reactnativepushnotification.** { *; }
+
+# Keep our app classes
+-keep class com.deathclock.** { *; }
+
+# Keep reflection-based classes
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes SourceFile,LineNumberTable
+
+# Keep enum classes
+-keepclassmembers enum * { *; }
