@@ -129,7 +129,8 @@
       "Bash(npm run analyze-bundle:*)",
       "WebSearch",
       "Bash(npm run start:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
