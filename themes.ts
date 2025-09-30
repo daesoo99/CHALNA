@@ -1,47 +1,29 @@
 export interface Theme {
-  backgroundColor: string;
-  textColor: string;
-  primaryColor: string;
-  secondaryColor: string;
-  inputBackground: string;
-  placeholderColor: string;
-  buttonBackground: string;
-  buttonStopBackground: string;
-  modalOverlay: string;
-  modalBackground: string;
-  languageButtonBackground: string;
-  selectedLanguageBackground: string;
-  statusBarStyle: 'light-content' | 'dark-content';
+  background: string;
+  surface: string;
+  primary: string;
+  accent: string;
+  text: string;
+  input: string;
+  placeholder: string;
 }
 
 export const darkTheme: Theme = {
-  backgroundColor: '#000',
-  textColor: '#fff',
-  primaryColor: '#ff4444',
-  secondaryColor: '#999',
-  inputBackground: '#333',
-  placeholderColor: '#666',
-  buttonBackground: '#ff4444',
-  buttonStopBackground: '#666',
-  modalOverlay: 'rgba(0, 0, 0, 0.8)',
-  modalBackground: '#222',
-  languageButtonBackground: '#333',
-  selectedLanguageBackground: '#ff4444',
-  statusBarStyle: 'light-content',
+  background: '#0f0f0f',
+  surface: '#1a1a1a',
+  primary: '#d4af37', // Warm gold - representing precious time
+  accent: '#cd853f', // Soft bronze - meditative and warm
+  text: '#f5f5dc', // Warm beige - softer than pure white
+  input: '#1a1a1a',
+  placeholder: '#a0a0a0',
 };
 
 export const lightTheme: Theme = {
-  backgroundColor: '#f8f9fa',
-  textColor: '#212529',
-  primaryColor: '#dc3545',
-  secondaryColor: '#6c757d',
-  inputBackground: '#fff',
-  placeholderColor: '#adb5bd',
-  buttonBackground: '#dc3545',
-  buttonStopBackground: '#6c757d',
-  modalOverlay: 'rgba(0, 0, 0, 0.5)',
-  modalBackground: '#fff',
-  languageButtonBackground: '#e9ecef',
-  selectedLanguageBackground: '#dc3545',
-  statusBarStyle: 'dark-content',
+  background: '#fefefe',
+  surface: '#f9f7f4',
+  primary: '#b8860b', // Darker gold for light theme
+  accent: '#8b4513', // Saddle brown - earthy and grounding
+  text: '#2c2c2c', // Soft dark gray
+  input: '#f9f7f4',
+  placeholder: '#7a7a7a',
 };

@@ -47,11 +47,11 @@ android/app/build.gradle:103
 - 버전을 1.0.0으로 업데이트 필요
 - 앱 이름을 "Death Clock"으로 일관성 있게 변경
 
-### 4. **번들 ID 설정** ⚠️
+### 4. **번들 ID 설정** ✅
 ```
-defaultConfig.applicationId = "com.deathclock"
+defaultConfig.applicationId = "com.kimdaesoo.deathclock"
 ```
-- 개발자 도메인으로 변경 권장 (예: com.kimdaesoo.deathclock)
+- 개발자 도메인으로 설정 완료
 
 ### 5. **앱 설명 및 키워드** 📝
 - Play Store용 앱 설명 (한국어/영어)

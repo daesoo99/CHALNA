@@ -1,19 +1,14 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+// 간소화된 CrashReporter - 로컬 앱용
 import { Alert } from 'react-native';
 
-interface CrashReport {
-  id: string;
+interface SimpleCrashReport {
   timestamp: string;
   error: string;
   stackTrace?: string;
-  userAgent: string;
-  appVersion: string;
-  componentStack?: string;
 }
 
 class CrashReporter {
   private static instance: CrashReporter;
-  private crashReports: CrashReport[] = [];
 
   static getInstance(): CrashReporter {
     if (!CrashReporter.instance) {
@@ -22,81 +17,40 @@ class CrashReporter {
     return CrashReporter.instance;
   }
 
-  async reportCrash(error: Error, componentStack?: string): Promise<void> {
+  async reportCrash(error: Error, _componentStack?: string): Promise<void> {
     try {
-      const crashReport: CrashReport = {
-        id: Date.now().toString(),
+      const crashReport: SimpleCrashReport = {
         timestamp: new Date().toISOString(),
         error: error.message,
         stackTrace: error.stack,
-        userAgent: 'DeathClock Mobile App',
-        appVersion: '0.0.1',
-        componentStack
       };
 
-      // Store crash report locally
-      this.crashReports.push(crashReport);
-      await this.saveCrashReports();
+      // 단순히 콘솔에 로그 (개발용)
+      console.error('⏳ CHALNA Crash:', crashReport);
 
-      // Show user-friendly error message
+      // 사용자에게 간단한 알림
       Alert.alert(
-        'Unexpected Error',
-        'The app encountered an error. Your data is safe and the issue has been logged.',
-        [{ text: 'OK' }]
+        '오류가 발생했습니다',
+        '앱에서 오류가 발생했지만 데이터는 안전합니다. 다시 시도해주세요.',
+        [{ text: '확인' }]
       );
-
-      console.error('Crash reported:', crashReport);
     } catch (reportingError) {
       console.error('Failed to report crash:', reportingError);
     }
   }
 
-  async getCrashReports(): Promise<CrashReport[]> {
-    try {
-      const stored = await AsyncStorage.getItem('crashReports');
-      return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to load crash reports:', error);
-      return [];
-    }
-  }
-
-  private async saveCrashReports(): Promise<void> {
-    try {
-      await AsyncStorage.setItem('crashReports', JSON.stringify(this.crashReports));
-    } catch (error) {
-      console.error('Failed to save crash reports:', error);
-    }
-  }
-
-  async clearCrashReports(): Promise<void> {
-    try {
-      this.crashReports = [];
-      await AsyncStorage.removeItem('crashReports');
-    } catch (error) {
-      console.error('Failed to clear crash reports:', error);
-    }
-  }
-
+  // 전역 에러 핸들러 설정 (간소화)
   setupGlobalErrorHandler(): void {
-    // Handle unhandled promise rejections
-    const originalHandler = global.ErrorUtils?.getGlobalHandler?.();
+    const originalHandler = (global as any).ErrorUtils?.getGlobalHandler?.();
 
-    global.ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
+    (global as any).ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
       this.reportCrash(error);
 
-      // Call original handler if it exists
+      // 원래 핸들러도 호출
       if (originalHandler) {
         originalHandler(error, isFatal);
       }
     });
-
-    // Handle unhandled promise rejections
-    if (typeof global.addEventListener === 'function') {
-      global.addEventListener('unhandledrejection', (event: any) => {
-        this.reportCrash(new Error(`Unhandled Promise Rejection: ${event.reason}`));
-      });
-    }
   }
 }
 

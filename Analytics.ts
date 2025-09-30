@@ -9,6 +9,7 @@ interface AnalyticsData {
   languageChanges: number;
   averageLifeExpectancy: number;
   birthdateSet: boolean;
+  resets: number;
 }
 
 class Analytics {
@@ -50,6 +51,12 @@ class Analytics {
     await this.saveData(data);
   }
 
+  async trackReset() {
+    const data = await this.getData();
+    data.resets += 1;
+    await this.saveData(data);
+  }
+
   async trackSessionEnd() {
     if (this.sessionStartTime) {
       const sessionDuration = Date.now() - this.sessionStartTime;
@@ -57,7 +64,14 @@ class Analytics {
       data.totalTimeActive += Math.round(sessionDuration / 1000);
       await this.saveData(data);
       this.sessionStartTime = null;
+      console.log('Analytics session ended and cleaned up');
     }
+  }
+
+  // Method to clean up and reset analytics session
+  cleanup() {
+    this.sessionStartTime = null;
+    console.log('Analytics cleanup completed');
   }
 
   async getAnalytics(): Promise<AnalyticsData> {
@@ -99,6 +113,7 @@ class Analytics {
       languageChanges: 0,
       averageLifeExpectancy: 0,
       birthdateSet: false,
+      resets: 0,
     };
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, memo, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,20 +15,21 @@ import {
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTranslation } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { darkTheme, lightTheme, Theme } from './themes';
-import NotificationService from './NotificationService';
 import ErrorBoundary from './ErrorBoundary';
-import Analytics from './Analytics';
-import DataExport from './DataExport';
-import SleepMode from './SleepMode';
-import MilestoneManager from './MilestoneManager';
 import CrashReporter from './CrashReporter';
-import HapticFeedback from 'react-native-haptic-feedback';
+import { storageManager } from './StorageManager';
+import SecurityAuditor from './SecurityAuditor';
 import './i18n';
 
 const App = memo(() => {
+  console.log('🚀 App component rendering...');
   const { t, i18n } = useTranslation();
+
+  // Memory leak prevention: Component mount state tracking
+  const isMountedRef = useRef(true);
+  const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
+  const abortControllerRef = useRef<AbortController | null>(null);
   const [birthDate, setBirthDate] = useState('');
   const [lifeExpectancy, setLifeExpectancy] = useState('80');
   const [timeLeft, setTimeLeft] = useState({
@@ -43,683 +44,749 @@ const App = memo(() => {
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [currentTheme, setCurrentTheme] = useState<Theme>(darkTheme);
-  const [showNotification, setShowNotification] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
-  const [appState, setAppState] = useState(AppState.currentState);
-  const [isSleeping, setIsSleeping] = useState(false);
-  const [sleepModeEnabled, setSleepModeEnabled] = useState(false);
-  const [testModeEnabled, setTestModeEnabled] = useState(false);
+  const [currentTimezone, setCurrentTimezone] = useState<string>('');
+  const [timezoneChangedNotification, setTimezoneChangedNotification] = useState(false);
+  const [appState, setAppState] = useState<string>(AppState.currentState);
+  const [lastCalculationTime, setLastCalculationTime] = useState<number>(Date.now());
+  const [isBackgroundPaused, setIsBackgroundPaused] = useState(false);
+  const [syncNotification, setSyncNotification] = useState<string | null>(null);
 
-  const languages = [
+  // Memory management utilities
+  const safeSetState = useCallback((setter: any, value: any) => {
+    if (isMountedRef.current) {
+      setter(value);
+    } else {
+      console.warn('⚠️ Prevented setState on unmounted component');
+    }
+  }, []);
+
+  const addTimeout = useCallback((timeoutId: ReturnType<typeof setTimeout>) => {
+    timeoutIdsRef.current.add(timeoutId);
+    return timeoutId;
+  }, []);
+
+  const clearAllTimeouts = useCallback(() => {
+    timeoutIdsRef.current.forEach(timeoutId => {
+      clearTimeout(timeoutId);
+    });
+    timeoutIdsRef.current.clear();
+    console.log('🧹 Cleared all timeouts');
+  }, []);
+
+  const languages = useMemo(() => [
     { code: 'ko', name: '한국어' },
     { code: 'en', name: 'English' },
     { code: 'ja', name: '日本語' },
     { code: 'zh', name: '中文' },
-  ];
+  ], []);
+
+  // 타임존 변경 감지 및 처리 함수
+  const detectTimezoneChange = () => {
+    const currentTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const currentOffset = new Date().getTimezoneOffset();
+    const tzString = `${currentTz}_${currentOffset}`;
+
+    if (currentTimezone && currentTimezone !== tzString) {
+      console.log('Timezone changed detected:', {
+        previous: currentTimezone,
+        current: tzString
+      });
+
+      // 타임존 변경 시 시간 재계산
+      if (isActive && birthDate) {
+        calculateTimeLeft();
+      }
+
+      // 선택적으로 사용자에게 알림 (5초 후 자동 숨김)
+      safeSetState(setTimezoneChangedNotification, true);
+      const timeoutId = setTimeout(() => {
+        safeSetState(setTimezoneChangedNotification, false);
+        timeoutIdsRef.current.delete(timeoutId);
+      }, 5000);
+      addTimeout(timeoutId);
+    }
+
+    safeSetState(setCurrentTimezone, tzString);
+  };
 
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
-    if (isActive && birthDate && !isSleeping) {
+    // 타이머는 앱이 활성 상태이고, 백그라운드 일시정지 상태가 아닐 때만 실행
+    if (isActive && birthDate && !isBackgroundPaused && appState === 'active') {
+      console.log('▶️ Starting timer interval');
       interval = setInterval(() => {
         calculateTimeLeft();
+        safeSetState(setLastCalculationTime, Date.now());
       }, 1000);
-    } else if ((!isActive || isSleeping) && interval) {
-      clearInterval(interval);
+    } else if (isBackgroundPaused) {
+      console.log('⏸️ Timer paused due to background state');
     }
 
     return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isActive, birthDate, lifeExpectancy, calculateTimeLeft, isSleeping]);
-
-  useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Initialize crash reporter first
-        const crashReporter = CrashReporter.getInstance();
-        crashReporter.setupGlobalErrorHandler();
-
-        await Promise.all([
-          loadTheme(),
-          loadSavedData(),
-          NotificationService.requestPermissions(),
-          Analytics.initializeSession()
-        ]);
-      } catch (error) {
-        console.log('Error initializing app:', error);
-        const crashReporter = CrashReporter.getInstance();
-        crashReporter.reportCrash(error as Error);
-      } finally {
-        setIsLoading(false);
+      if (interval) {
+        console.log('⏹️ Clearing timer interval');
+        clearInterval(interval);
+        interval = null;
       }
     };
+  }, [isActive, birthDate, lifeExpectancy, isBackgroundPaused, appState]);
 
-    initializeApp();
-    checkSleepMode(); // Initial sleep mode check
-  }, [checkSleepMode]);
-
-  useEffect(() => {
-    setCurrentTheme(isDarkTheme ? darkTheme : lightTheme);
-  }, [isDarkTheme]);
-
-  useEffect(() => {
-    if (isActive && showNotification && birthDate) {
-      NotificationService.updateNotification(timeLeft, t);
-    } else {
-      NotificationService.cancelNotification();
-    }
-  }, [timeLeft, showNotification, isActive, birthDate, t]);
-
+  // 포괄적인 AppState 변화 처리
   useEffect(() => {
     const handleAppStateChange = (nextAppState: string) => {
-      if (appState.match(/inactive|background/) && nextAppState === 'active') {
-        if (isActive) {
-          calculateTimeLeft();
-        }
+      console.log('🔄 App state change:', { from: appState, to: nextAppState });
+
+      const previousState = appState;
+      safeSetState(setAppState, nextAppState);
+
+      if (nextAppState === 'active') {
+        // 포그라운드 복귀 시 처리
+        handleForegroundReturn(previousState);
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        // 백그라운드 진입 시 처리
+        handleBackgroundEntry();
       }
-      setAppState(nextAppState);
     };
 
     const subscription = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
+      console.log('🧹 Cleaning up AppState listener');
       subscription?.remove();
     };
-  }, [appState, isActive, calculateTimeLeft]);
+  }, [appState, isActive, birthDate, lastCalculationTime]);
 
+  // Master cleanup effect for memory leak prevention
   useEffect(() => {
-    // Check sleep mode every minute
-    const sleepCheckInterval = setInterval(checkSleepMode, 60000);
-
     return () => {
-      clearInterval(sleepCheckInterval);
-      Analytics.trackSessionEnd();
+      console.log('🧹 Master cleanup: Component unmounting');
+
+      // Mark component as unmounted
+      isMountedRef.current = false;
+
+      // Clear all pending timeouts
+      clearAllTimeouts();
+
+      // Abort any ongoing async operations
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        console.log('🚫 Aborted ongoing async operations');
+      }
+
+      console.log('✅ Master cleanup completed');
     };
-  }, [checkSleepMode]);
+  }, [clearAllTimeouts]);
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      const sleepSettings = await SleepMode.getSettings();
-      setSleepModeEnabled(sleepSettings.enabled);
+  // 포그라운드 복귀 시 처리 함수
+  const handleForegroundReturn = (previousState: string) => {
+    console.log('📱 App returned to foreground from:', previousState);
 
-      const milestoneSettings = await MilestoneManager.getSettings();
-      setTestModeEnabled(milestoneSettings.testMode);
-    };
+    // 타임존 변경 체크 (기존 기능 유지)
+    detectTimezoneChange();
 
-    loadSettings();
-  }, []);
+    if (isActive && birthDate && isBackgroundPaused) {
+      console.log('⏰ Synchronizing timer after background period');
 
-  const checkSleepMode = useCallback(async () => {
-    const shouldPause = await SleepMode.shouldPauseTimer();
-    setIsSleeping(shouldPause);
-  }, []);
+      // 백그라운드에서 경과된 시간 계산
+      const currentTime = Date.now();
+      const backgroundDuration = currentTime - lastCalculationTime;
 
-  const toggleSleepMode = async () => {
-    const newState = !sleepModeEnabled;
-    setSleepModeEnabled(newState);
-    await SleepMode.updateSetting('enabled', newState);
-    await checkSleepMode();
-  };
+      console.log('Background duration:', Math.floor(backgroundDuration / 1000), 'seconds');
 
-  const toggleTestMode = async () => {
-    const newState = await MilestoneManager.toggleTestMode();
-    setTestModeEnabled(newState);
+      // 즉시 시간 재계산으로 동기화
+      calculateTimeLeft();
+      safeSetState(setLastCalculationTime, currentTime);
+      safeSetState(setIsBackgroundPaused, false);
 
-    // Reset milestones for the new mode
-    await MilestoneManager.resetMilestones();
+      // 사용자에게 동기화 알림 (선택적)
+      if (backgroundDuration > 60000) { // 1분 이상 백그라운드에 있었던 경우
+        const minutes = Math.floor(backgroundDuration / 60000);
+        const syncMessage = `⏰ ${minutes}분 후 복귀했습니다. 시간을 동기화했습니다.`;
+        safeSetState(setSyncNotification, syncMessage);
+        console.log('🔔 Long background period detected, showing sync notification');
 
-    // Show informative alert
-    Alert.alert(
-      testModeEnabled ? t('testModeOff') : t('testModeOn'),
-      testModeEnabled
-        ? t('testModeOffMessage')
-        : t('testModeOnMessage'),
-      [{ text: t('acknowledge'), style: 'default' }]
-    );
-  };
-
-  const expectedDeathDate = useMemo(() => {
-    if (!birthDate) return null;
-    const birth = new Date(birthDate);
-    const expectedLifeYears = parseInt(lifeExpectancy, 10);
-
-    // Handle leap year birthdays (Feb 29)
-    let targetYear = birth.getFullYear() + expectedLifeYears;
-    let targetMonth = birth.getMonth();
-    let targetDate = birth.getDate();
-
-    // If birthday is Feb 29 and target year is not leap year, use Feb 28
-    if (targetMonth === 1 && targetDate === 29) {
-      const isTargetLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
-      if (!isTargetLeapYear) {
-        targetDate = 28;
+        // 3초 후 알림 자동 숨김
+        const timeoutId = setTimeout(() => {
+          safeSetState(setSyncNotification, null);
+          timeoutIdsRef.current.delete(timeoutId);
+        }, 3000);
+        addTimeout(timeoutId);
       }
     }
+  };
 
-    return new Date(targetYear, targetMonth, targetDate);
-  }, [birthDate, lifeExpectancy]);
+  // 백그라운드 진입 시 처리 함수
+  const handleBackgroundEntry = () => {
+    console.log('🌙 App entered background/inactive state');
 
-  // Override death date for test mode - set to 5 minutes from now
-  const testDeathDate = useMemo(() => {
-    if (testModeEnabled) {
-      const now = new Date();
-      return new Date(now.getTime() + 5 * 60 * 1000); // 5 minutes from now
+    if (isActive && birthDate) {
+      // 마지막 계산 시간 저장
+      const currentTime = Date.now();
+      safeSetState(setLastCalculationTime, currentTime);
+      safeSetState(setIsBackgroundPaused, true);
+
+      console.log('💤 Timer paused for background optimization');
+
+      // 백그라운드에서의 리소스 절약을 위해 추가 최적화 가능
+      // 예: 불필요한 계산 중단, 메모리 정리 등
     }
-    return null;
-  }, [testModeEnabled]);
+  };
 
-  const finalDeathDate = testModeEnabled && testDeathDate ? testDeathDate : expectedDeathDate;
+  useEffect(() => {
+    const initializeApp = async () => {
+      try {
+        console.log('🔄 Initializing CHALNA app...');
 
-  const lifeProgress = useMemo(() => {
-    if (!birthDate || !expectedDeathDate) return 0;
+        // Initialize simplified error handling
+        const crashReporter = CrashReporter.getInstance();
+        crashReporter.setupGlobalErrorHandler();
 
-    const birth = new Date(birthDate);
-    const now = new Date();
-    const totalLife = expectedDeathDate.getTime() - birth.getTime();
-    const lived = now.getTime() - birth.getTime();
+        // Initialize timezone
+        detectTimezoneChange();
 
-    return Math.min(Math.max((lived / totalLife) * 100, 0), 100);
-  }, [birthDate, expectedDeathDate]);
+        // Load saved data
+        await loadSavedData();
+        await loadTheme();
+
+        console.log('✅ App initialized successfully');
+      } catch (error) {
+        console.error('❌ App initialization failed:', error);
+        Alert.alert(
+          t('errorTitle'),
+          '앱 초기화 중 오류가 발생했습니다. 다시 시도해주세요.',
+          [{ text: t('acknowledge') }]
+        );
+      } finally {
+        safeSetState(setIsLoading, false);
+      }
+    };
+
+    initializeApp();
+  }, []);
 
   const calculateTimeLeft = useCallback(() => {
-    if (!birthDate || !finalDeathDate) return;
+    if (!birthDate || !lifeExpectancy) return;
 
-    const now = new Date();
+    try {
+      // 기본 검증
+      const security = SecurityAuditor.getInstance();
+      const birthValidation = security.validateBirthDate(birthDate);
+      const lifeValidation = security.validateLifeExpectancy(parseInt(lifeExpectancy));
 
-    if (finalDeathDate <= now) {
-      setTimeLeft({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
-      Alert.alert(t('timeOverTitle'), t('timeOverMessage'));
-      setIsActive(false);
-      return;
+      if (!birthValidation.isValid) {
+        Alert.alert(t('errorTitle'), birthValidation.message);
+        return;
+      }
+
+      if (!lifeValidation.isValid) {
+        Alert.alert(t('errorTitle'), lifeValidation.message);
+        return;
+      }
+
+
+      // UTC 기반 안정적인 시간 계산
+      const birth = new Date(birthDate + 'T00:00:00Z'); // UTC로 명시적 설정
+      const expectedDeath = new Date(birth);
+      expectedDeath.setUTCFullYear(birth.getUTCFullYear() + parseInt(lifeExpectancy));
+
+
+      // 로컬 시간 기준으로 다시 계산 (사용자 관점에서의 정확한 시간)
+      const localBirth = new Date(birthDate + 'T00:00:00');
+      const localExpectedDeath = new Date(localBirth);
+      localExpectedDeath.setFullYear(localBirth.getFullYear() + parseInt(lifeExpectancy));
+
+      const localNow = new Date();
+      const difference = localExpectedDeath.getTime() - localNow.getTime();
+
+      if (difference <= 0) {
+        safeSetState(setTimeLeft, { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
+        if (isMountedRef.current) {
+          Alert.alert(t('timeOverTitle'), t('timeOverMessage'));
+        }
+        return;
+      }
+
+      // 더 정확한 시간 계산 (윤년 고려)
+      const totalSeconds = Math.floor(difference / 1000);
+      const totalMinutes = Math.floor(totalSeconds / 60);
+
+      // 년/월 계산을 위한 더 정확한 로직
+      const currentDate = new Date(localNow);
+      const endDate = new Date(localExpectedDeath);
+
+      let years = endDate.getFullYear() - currentDate.getFullYear();
+      let months = endDate.getMonth() - currentDate.getMonth();
+
+      if (months < 0) {
+        years--;
+        months += 12;
+      }
+
+      if (endDate.getDate() < currentDate.getDate()) {
+        months--;
+        if (months < 0) {
+          years--;
+          months += 12;
+        }
+      }
+
+      // 남은 일, 시, 분, 초 계산
+      const tempDate = new Date(currentDate);
+      tempDate.setFullYear(tempDate.getFullYear() + years);
+      tempDate.setMonth(tempDate.getMonth() + months);
+
+      const remainingMs = endDate.getTime() - tempDate.getTime();
+      const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
+
+      safeSetState(setTimeLeft, {
+        years: Math.max(0, years),
+        months: Math.max(0, months),
+        days: Math.max(0, days),
+        hours: Math.max(0, hours),
+        minutes: Math.max(0, minutes),
+        seconds: Math.max(0, seconds)
+      });
+    } catch (error) {
+      console.error('Time calculation error:', error);
+      CrashReporter.getInstance().reportCrash(error as Error);
     }
+  }, [birthDate, lifeExpectancy, safeSetState]);
 
-    // Check milestones before calculating time
-    MilestoneManager.checkMilestones(t);
+  const loadSavedData = async () => {
+    // Create new AbortController for this operation
+    const currentController = new AbortController();
+    abortControllerRef.current = currentController;
 
-    // Use a more reliable calculation method
-    let years = finalDeathDate.getFullYear() - now.getFullYear();
-    let months = finalDeathDate.getMonth() - now.getMonth();
-    let days = finalDeathDate.getDate() - now.getDate();
+    try {
+      if (currentController.signal.aborted) return;
+      // Load saved data
+      const savedBirthDate = await storageManager.get('birthDate');
+      const savedLifeExpectancy = await storageManager.get('lifeExpectancy');
+      const savedLanguage = await storageManager.get('language');
+      const savedActive = await storageManager.get('isActive');
+      const savedLastCalculationTime = await storageManager.get('lastCalculationTime');
 
-    // Adjust if day is negative
-    if (days < 0) {
-      months--;
-      // Get days in previous month
-      const prevMonth = new Date(expectedDeathDate.getFullYear(), expectedDeathDate.getMonth(), 0);
-      days += prevMonth.getDate();
+      // Load saved data if available (with safe setState)
+      if (savedBirthDate) safeSetState(setBirthDate, savedBirthDate);
+      if (savedLifeExpectancy) safeSetState(setLifeExpectancy, savedLifeExpectancy);
+      if (savedLanguage && !currentController.signal.aborted) {
+        await i18n.changeLanguage(savedLanguage);
+      }
+      if (savedActive !== null) {
+        safeSetState(setIsActive, savedActive);
+
+        // 앱이 다시 시작될 때 마지막 계산 시간 복원 및 동기화
+        if (savedActive && savedLastCalculationTime) {
+          const currentTime = Date.now();
+          const timeSinceLastCalculation = currentTime - savedLastCalculationTime;
+
+          console.log('📱 App restarted with active timer');
+          console.log('Time since last calculation:', Math.floor(timeSinceLastCalculation / 1000), 'seconds');
+
+          safeSetState(setLastCalculationTime, currentTime);
+
+          // 앱 재시작 시 즉시 시간 재계산
+          if (savedBirthDate) {
+            const timeoutId = setTimeout(() => {
+              if (isMountedRef.current) {
+                calculateTimeLeft();
+              }
+              timeoutIdsRef.current.delete(timeoutId);
+            }, 100);
+            addTimeout(timeoutId);
+          }
+        }
+      }
+
+      // Check storage health
+      const healthCheck = await storageManager.checkStorageHealth();
+      if (!healthCheck.isHealthy) {
+        console.warn('Storage health issue:', healthCheck.message);
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('🚫 Load operation was cancelled');
+        return;
+      }
+      console.error('Failed to load saved data:', error);
+    } finally {
+      if (abortControllerRef.current === currentController) {
+        abortControllerRef.current = null;
+      }
     }
+  };
 
-    // Adjust if month is negative
-    if (months < 0) {
-      years--;
-      months += 12;
+  const saveData = async () => {
+    // Create new AbortController for this operation
+    const currentController = new AbortController();
+    abortControllerRef.current = currentController;
+
+    try {
+      if (currentController.signal.aborted) return;
+      // Save data including app state management
+      await storageManager.set('birthDate', birthDate);
+      await storageManager.set('lifeExpectancy', lifeExpectancy);
+      await storageManager.set('isActive', isActive);
+      await storageManager.set('language', i18n.language);
+      await storageManager.set('lastCalculationTime', lastCalculationTime);
+
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('🚫 Save operation was cancelled');
+        return;
+      }
+      console.error('Failed to save data:', error);
+    } finally {
+      if (abortControllerRef.current === currentController) {
+        abortControllerRef.current = null;
+      }
     }
+  };
 
-    // Calculate remaining time for hours, minutes, seconds
-    const todayAtTargetTime = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      finalDeathDate.getHours(),
-      finalDeathDate.getMinutes(),
-      finalDeathDate.getSeconds()
-    );
-
-    const remainingMillis = finalDeathDate.getTime() - now.getTime();
-    const remainingToday = todayAtTargetTime.getTime() - now.getTime();
-
-    let hours = Math.floor((remainingToday % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    let minutes = Math.floor((remainingToday % (1000 * 60 * 60)) / (1000 * 60));
-    let seconds = Math.floor((remainingToday % (1000 * 60)) / 1000);
-
-    // If target time has passed today, adjust for tomorrow
-    if (remainingToday < 0) {
-      hours = 24 + hours;
-      minutes = Math.floor((remainingMillis % (1000 * 60 * 60)) / (1000 * 60));
-      seconds = Math.floor((remainingMillis % (1000 * 60)) / 1000);
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await storageManager.get('isDarkTheme', { defaultValue: true });
+      safeSetState(setIsDarkTheme, savedTheme);
+      safeSetState(setCurrentTheme, savedTheme ? darkTheme : lightTheme);
+    } catch (error) {
+      console.error('Failed to load theme:', error);
     }
+  };
 
-    // Ensure non-negative values
-    setTimeLeft({
-      years: Math.max(0, years),
-      months: Math.max(0, months),
-      days: Math.max(0, days),
-      hours: Math.max(0, hours),
-      minutes: Math.max(0, minutes),
-      seconds: Math.max(0, seconds)
-    });
-  }, [birthDate, finalDeathDate, t, expectedDeathDate]);
+  const toggleTheme = async () => {
+    try {
+      const newTheme = !isDarkTheme;
+      safeSetState(setIsDarkTheme, newTheme);
+      safeSetState(setCurrentTheme, newTheme ? darkTheme : lightTheme);
+      await storageManager.set('isDarkTheme', newTheme);
+    } catch (error) {
+      console.error('Failed to save theme:', error);
+    }
+  };
 
-  const startClock = async () => {
-    HapticFeedback.trigger('impactMedium');
-
+  const handleStart = () => {
     if (!birthDate) {
       Alert.alert(t('errorTitle'), t('errorBirthDate'));
       return;
     }
 
-    const birth = new Date(birthDate);
-    if (isNaN(birth.getTime())) {
-      Alert.alert(t('errorTitle'), t('errorDateFormat'));
-      return;
-    }
-
-    const now = new Date();
-    if (birth > now) {
-      Alert.alert(t('errorTitle'), t('errorFutureDate'));
-      return;
-    }
-
-    const age = now.getFullYear() - birth.getFullYear();
-    if (age > 150) {
-      Alert.alert(t('errorTitle'), t('errorTooOld'));
-      return;
-    }
-
-    const expectedLifeYears = parseInt(lifeExpectancy, 10);
-    if (isNaN(expectedLifeYears) || expectedLifeYears < 1 || expectedLifeYears > 150) {
-      Alert.alert(t('errorTitle'), t('errorLifeExpectancyRange'));
-      return;
-    }
-    if (expectedLifeYears < age) {
-      Alert.alert(t('errorTitle'), t('errorLifeExpectancy'));
-      return;
-    }
-
-    await saveData();
-    await Analytics.trackTimerStart(expectedLifeYears);
-    await MilestoneManager.trackTimerStart(); // Track timer start for milestones
-    setIsActive(true);
+    console.log('🚀 Starting CHALNA timer');
     calculateTimeLeft();
+    safeSetState(setIsActive, true);
+    safeSetState(setLastCalculationTime, Date.now());
+    safeSetState(setIsBackgroundPaused, false);
+    saveData();
   };
 
-  const stopClock = () => {
-    HapticFeedback.trigger('impactLight');
-    setIsActive(false);
-    NotificationService.cancelNotification();
+  const handleStop = () => {
+    console.log('🛑 Stopping CHALNA timer');
+    safeSetState(setIsActive, false);
+    safeSetState(setIsBackgroundPaused, false);
+    saveData();
   };
 
-  const toggleNotification = () => {
-    setShowNotification(!showNotification);
-    if (showNotification) {
-      NotificationService.cancelNotification();
-    }
-  };
-
-  const changeLanguage = async (langCode: string) => {
-    i18n.changeLanguage(langCode);
-    await Analytics.trackLanguageChange();
-    setShowLanguageModal(false);
-  };
-
-  const onDateChange = (event: any, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      // Validate date
-      const now = new Date();
-      if (date > now) {
-        Alert.alert(t('errorTitle'), t('errorFutureDate'));
-        return;
-      }
-
-      const age = now.getFullYear() - date.getFullYear();
-      if (age > 150) {
-        Alert.alert(t('errorTitle'), t('errorTooOld'));
-        return;
-      }
-
-      // Check for invalid dates (like Feb 30)
-      const year = date.getFullYear();
-      const month = date.getMonth();
-      const day = date.getDate();
-      const testDate = new Date(year, month, day);
-
-      if (testDate.getFullYear() !== year ||
-          testDate.getMonth() !== month ||
-          testDate.getDate() !== day) {
-        Alert.alert(t('errorTitle'), t('errorInvalidDate'));
-        return;
-      }
-
-      setSelectedDate(date);
-      const formattedDate = date.toISOString().split('T')[0];
-      setBirthDate(formattedDate);
-      Analytics.trackBirthdateSet();
-    }
-  };
-
-  const showDatePickerModal = () => {
-    setShowDatePicker(true);
-  };
-
-  const loadTheme = async () => {
+  const handleLanguageChange = useCallback(async (languageCode: string) => {
     try {
-      const savedTheme = await AsyncStorage.getItem('theme');
-      if (savedTheme !== null) {
-        const isThemeDark = savedTheme === 'dark';
-        setIsDarkTheme(isThemeDark);
-      }
+      await i18n.changeLanguage(languageCode);
+      await storageManager.set('language', languageCode);
+      safeSetState(setShowLanguageModal, false);
     } catch (error) {
-      console.log('Error loading theme:', error);
+      console.error('Failed to change language:', error);
     }
-  };
+  }, [safeSetState]);
 
-  const loadSavedData = async () => {
-    try {
-      const savedBirthDate = await AsyncStorage.getItem('birthDate');
-      const savedLifeExpectancy = await AsyncStorage.getItem('lifeExpectancy');
-
-      if (savedBirthDate) {
-        setBirthDate(savedBirthDate);
-      }
-      if (savedLifeExpectancy) {
-        setLifeExpectancy(savedLifeExpectancy);
-      }
-    } catch (error) {
-      console.log('Error loading saved data:', error);
+  const handleDateChange = useCallback((event: any, selectedDate?: Date) => {
+    safeSetState(setShowDatePicker, false);
+    if (selectedDate && isMountedRef.current) {
+      const formattedDate = selectedDate.toISOString().split('T')[0];
+      safeSetState(setBirthDate, formattedDate);
+      safeSetState(setSelectedDate, selectedDate);
     }
-  };
-
-  const saveData = async () => {
-    try {
-      await AsyncStorage.setItem('birthDate', birthDate);
-      await AsyncStorage.setItem('lifeExpectancy', lifeExpectancy);
-    } catch (error) {
-      console.log('Error saving data:', error);
-    }
-  };
-
-  const toggleTheme = async () => {
-    HapticFeedback.trigger('selection');
-    try {
-      const newTheme = !isDarkTheme;
-      setIsDarkTheme(newTheme);
-      await AsyncStorage.setItem('theme', newTheme ? 'dark' : 'light');
-      await Analytics.trackThemeChange();
-      await MilestoneManager.trackThemeChange(); // Track theme change for milestones
-    } catch (error) {
-      console.log('Error saving theme:', error);
-    }
-  };
+  }, [safeSetState]);
 
   if (isLoading) {
     return (
-      <View style={[styles.container, styles.loadingContainer, { backgroundColor: currentTheme.backgroundColor }]}>
-        <StatusBar
-          barStyle={currentTheme.statusBarStyle}
-          backgroundColor={currentTheme.backgroundColor}
-        />
-        <ActivityIndicator size="large" color={currentTheme.primaryColor} />
-        <Text style={[styles.loadingText, { color: currentTheme.textColor }]}>{t('loading')}</Text>
+      <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
+        <ActivityIndicator size="large" color={currentTheme.primary} />
+        <Text style={[styles.loadingText, { color: currentTheme.text }]}>
+          {t('loading')}
+        </Text>
       </View>
     );
   }
 
   return (
     <ErrorBoundary>
-      <View style={[styles.container, { backgroundColor: currentTheme.backgroundColor }]}>
+      <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
         <StatusBar
-          barStyle={currentTheme.statusBarStyle}
-          backgroundColor={currentTheme.backgroundColor}
+          barStyle={isDarkTheme ? 'light-content' : 'dark-content'}
+          backgroundColor={currentTheme.background}
         />
 
+        {/* Header */}
         <View style={styles.header}>
-        <TouchableOpacity
-          style={[styles.themeButton, { backgroundColor: currentTheme.languageButtonBackground }]}
-          onPress={toggleTheme}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={isDarkTheme ? t('switchToLight') : t('switchToDark')}
-          accessibilityHint={t('toggleThemeHint')}
-        >
-          <Text style={styles.themeButtonText}>{isDarkTheme ? '☀️' : '🌙'}</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            onPress={toggleTheme}
+            style={[styles.themeButton, { borderColor: currentTheme.accent }]}
+            accessibilityLabel={isDarkTheme ? t('switchToLight') : t('switchToDark')}
+            accessibilityHint={t('toggleThemeHint')}
+          >
+            <Text style={[styles.themeButtonText, { color: currentTheme.accent }]}>
+              {isDarkTheme ? '☀️' : '🌙'}
+            </Text>
+          </TouchableOpacity>
 
-        <Text style={[styles.title, { color: currentTheme.textColor }]}>{t('title')}</Text>
-
-        <TouchableOpacity
-          style={[styles.languageButton, { backgroundColor: currentTheme.languageButtonBackground }]}
-          onPress={() => setShowLanguageModal(true)}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={t('selectLanguage')}
-          accessibilityHint={t('selectLanguageHint')}
-        >
-          <Text style={styles.languageButtonText}>🌐</Text>
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.inputContainer}>
-        <Text style={[styles.label, { color: currentTheme.textColor }]}>{t('birthDateLabel')}</Text>
-        <TouchableOpacity
-          style={[styles.input, styles.datePickerInput, {
-            backgroundColor: currentTheme.inputBackground
-          }]}
-          onPress={showDatePickerModal}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={`${t('birthDateLabel')}: ${birthDate || t('birthDatePlaceholder')}`}
-          accessibilityHint={t('selectBirthDateHint')}
-        >
-          <Text style={[{ color: birthDate ? currentTheme.textColor : currentTheme.placeholderColor }]}>
-            {birthDate || t('birthDatePlaceholder')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={[styles.label, { color: currentTheme.textColor }]}>{t('lifeExpectancyLabel')}</Text>
-        <TextInput
-          style={[styles.input, {
-            backgroundColor: currentTheme.inputBackground,
-            color: currentTheme.textColor
-          }]}
-          value={lifeExpectancy}
-          onChangeText={(text) => {
-            const numericText = text.replace(/[^0-9]/g, '');
-            if (numericText.length <= 3) {
-              setLifeExpectancy(numericText);
-            }
-          }}
-          placeholder={t('lifeExpectancyPlaceholder')}
-          placeholderTextColor={currentTheme.placeholderColor}
-          keyboardType="numeric"
-          maxLength={3}
-          returnKeyType="done"
-          accessible={true}
-          accessibilityLabel={t('lifeExpectancyLabel')}
-          accessibilityHint={t('lifeExpectancyHint')}
-        />
-      </View>
-
-      <TouchableOpacity
-        style={[styles.button, {
-          backgroundColor: isActive ? currentTheme.buttonStopBackground : currentTheme.buttonBackground
-        }]}
-        onPress={isActive ? stopClock : startClock}
-      >
-        <Text style={[styles.buttonText, { color: currentTheme.textColor }]}>
-          {isActive ? t('stopButton') : t('startButton')}
-        </Text>
-      </TouchableOpacity>
-
-      {isActive && (
-        <TouchableOpacity
-          style={[styles.notificationButton, {
-            backgroundColor: showNotification ? currentTheme.primaryColor : currentTheme.languageButtonBackground
-          }]}
-          onPress={toggleNotification}
-        >
-          <Text style={[styles.notificationButtonText, { color: currentTheme.textColor }]}>
-            {showNotification ? t('notificationOn') : t('notificationOff')}
-          </Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.exportButtonsContainer}>
-        <TouchableOpacity
-          style={[styles.exportButton, { backgroundColor: currentTheme.languageButtonBackground }]}
-          onPress={() => DataExport.shareData('json', t)}
-        >
-          <Text style={[styles.exportButtonText, { color: currentTheme.textColor }]}>
-            📄 {t('exportJSON')}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.exportButton, { backgroundColor: currentTheme.languageButtonBackground }]}
-          onPress={() => DataExport.shareData('csv', t)}
-        >
-          <Text style={[styles.exportButtonText, { color: currentTheme.textColor }]}>
-            📊 {t('exportCSV')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.settingsContainer}>
-        <TouchableOpacity
-          style={[styles.settingsButton, {
-            backgroundColor: sleepModeEnabled ? currentTheme.primaryColor : currentTheme.languageButtonBackground
-          }]}
-          onPress={toggleSleepMode}
-        >
-          <Text style={[styles.settingsButtonText, { color: currentTheme.textColor }]}>
-            🌙 {sleepModeEnabled ? t('sleepModeOn') : t('sleepModeOff')}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.settingsButton, {
-            backgroundColor: testModeEnabled ? currentTheme.buttonStopBackground : currentTheme.languageButtonBackground
-          }]}
-          onPress={toggleTestMode}
-        >
-          <Text style={[styles.settingsButtonText, { color: currentTheme.textColor }]}>
-            🧪 {testModeEnabled ? t('testModeOn') : t('testModeOff')}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {isSleeping && (
-        <View style={[styles.sleepIndicator, { backgroundColor: currentTheme.languageButtonBackground }]}>
-          <Text style={[styles.sleepIndicatorText, { color: currentTheme.textColor }]}>
-            😴 {t('sleepingNow')}
-          </Text>
-        </View>
-      )}
-
-      {isActive && (
-        <View style={styles.clockContainer}>
-          <Text style={[styles.clockTitle, { color: currentTheme.primaryColor }]}>{t('timeLeftTitle')}</Text>
-
-          <View style={styles.progressContainer}>
-            <View style={[styles.progressBar, { backgroundColor: currentTheme.languageButtonBackground }]}>
-              <View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: currentTheme.primaryColor,
-                    width: `${lifeProgress}%`
-                  }
-                ]}
-              />
-            </View>
-            <Text style={[styles.progressText, { color: currentTheme.secondaryColor }]}>
-              {t('lifeProgress')}: {lifeProgress.toFixed(1)}%
+          <View style={styles.titleContainer}>
+            <Text
+              style={[styles.title, { color: currentTheme.primary }]}
+              accessibilityRole="header"
+            >
+              {t('title')}
+            </Text>
+            <Text
+              style={[styles.subtitle, { color: currentTheme.accent }]}
+              accessibilityRole="text"
+            >
+              Every Moment Matters
             </Text>
           </View>
 
-          <View style={styles.timeDisplay}>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.years}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('years')}</Text>
-            </View>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.months}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('months')}</Text>
-            </View>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.days}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('days')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.timeDisplay}>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.hours}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('hours')}</Text>
-            </View>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.minutes}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('minutes')}</Text>
-            </View>
-            <View style={styles.timeUnit}>
-              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.seconds}</Text>
-              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('seconds')}</Text>
-            </View>
-          </View>
+          <TouchableOpacity
+            onPress={() => safeSetState(setShowLanguageModal, true)}
+            style={[styles.languageButton, { backgroundColor: currentTheme.primary, borderColor: currentTheme.accent }]}
+            accessibilityLabel={t('selectLanguage')}
+            accessibilityHint={t('selectLanguageHint')}
+          >
+            <Text style={styles.languageButtonText}>
+              {languages.find(lang => lang.code === i18n.language)?.name.slice(0, 2) || 'KO'}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
 
-      {showDatePicker && (
-        <DateTimePicker
-          value={selectedDate}
-          mode="date"
-          display="default"
-          onChange={onDateChange}
-          maximumDate={new Date()}
-          minimumDate={new Date(1900, 0, 1)}
-        />
-      )}
-
-      <Modal
-        visible={showLanguageModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowLanguageModal(false)}
-      >
-        <View style={[styles.modalOverlay, { backgroundColor: currentTheme.modalOverlay }]}>
-          <View style={[styles.modalContent, { backgroundColor: currentTheme.modalBackground }]}>
-            <Text style={[styles.modalTitle, { color: currentTheme.textColor }]}>{t('selectLanguage')}</Text>
-            <FlatList
-              data={languages}
-              keyExtractor={(item) => item.code}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.languageItem,
-                    { backgroundColor: currentTheme.languageButtonBackground },
-                    i18n.language === item.code && {
-                      backgroundColor: currentTheme.selectedLanguageBackground
-                    }
-                  ]}
-                  onPress={() => {
-                    HapticFeedback.trigger('selection');
-                    changeLanguage(item.code);
-                  }}
-                >
-                  <Text style={[
-                    styles.languageText,
-                    { color: currentTheme.textColor },
-                    i18n.language === item.code && styles.selectedLanguageText
-                  ]}>
-                    {item.name}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
+        {/* Input Section */}
+        <View style={styles.inputSection}>
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: currentTheme.text }]}>
+              {t('birthDateLabel')}
+            </Text>
             <TouchableOpacity
-              style={styles.closeButton}
-              onPress={() => setShowLanguageModal(false)}
+              onPress={() => safeSetState(setShowDatePicker, true)}
+              style={[styles.input, styles.inputWithBorder, { backgroundColor: currentTheme.input, borderColor: currentTheme.accent }]}
+              accessibilityLabel={t('birthDateLabel')}
+              accessibilityHint={t('selectBirthDateHint')}
             >
-              <Text style={[styles.closeButtonText, { color: currentTheme.textColor }]}>✕</Text>
+              <Text style={[styles.inputText, { color: birthDate ? currentTheme.text : currentTheme.placeholder }]}>
+                {birthDate || t('birthDatePlaceholder')}
+              </Text>
             </TouchableOpacity>
           </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={[styles.label, { color: currentTheme.text }]}>
+              {t('lifeExpectancyLabel')}
+            </Text>
+            <TextInput
+              style={[styles.input, styles.inputWithBorder, { backgroundColor: currentTheme.input, color: currentTheme.text, borderColor: currentTheme.accent }]}
+              value={lifeExpectancy}
+              onChangeText={setLifeExpectancy}
+              placeholder={t('lifeExpectancyPlaceholder')}
+              placeholderTextColor={currentTheme.placeholder}
+              keyboardType="numeric"
+              accessibilityLabel={t('lifeExpectancyLabel')}
+              accessibilityHint={t('lifeExpectancyHint')}
+            />
+          </View>
         </View>
-      </Modal>
+
+        {/* Time Display */}
+        <View style={styles.timeSection}>
+          <View style={[styles.timeHeader, { borderBottomColor: currentTheme.accent }]}>
+            <Text style={[styles.timeTitle, { color: currentTheme.primary }]}>
+              ⏳ {t('timeLeftTitle')}
+            </Text>
+            <Text style={[styles.philosophicalQuote, { color: currentTheme.accent }]}>
+              "찰나의 소중함을 느끼세요"
+            </Text>
+          </View>
+
+          <View style={[styles.timeDisplay, { backgroundColor: currentTheme.surface, borderColor: currentTheme.accent }]}>
+            <View style={styles.timeRow}>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.primary }]}
+                accessibilityLabel={`${timeLeft.years} ${t('years')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.primary }]}>
+                  {timeLeft.years}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('years')}
+                </Text>
+              </View>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.primary }]}
+                accessibilityLabel={`${timeLeft.months} ${t('months')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.primary }]}>
+                  {timeLeft.months}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('months')}
+                </Text>
+              </View>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.primary }]}
+                accessibilityLabel={`${timeLeft.days} ${t('days')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.primary }]}>
+                  {timeLeft.days}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('days')}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.timeRow}>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.accent }]}
+                accessibilityLabel={`${timeLeft.hours} ${t('hours')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.accent }]}>
+                  {timeLeft.hours}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('hours')}
+                </Text>
+              </View>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.accent }]}
+                accessibilityLabel={`${timeLeft.minutes} ${t('minutes')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.accent }]}>
+                  {timeLeft.minutes}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('minutes')}
+                </Text>
+              </View>
+              <View
+                style={[styles.timeCard, { backgroundColor: currentTheme.background, borderColor: currentTheme.accent }]}
+                accessibilityLabel={`${timeLeft.seconds} ${t('seconds')}`}
+                accessibilityRole="text"
+              >
+                <Text style={[styles.timeValue, { color: currentTheme.accent }]}>
+                  {timeLeft.seconds}
+                </Text>
+                <Text style={[styles.timeLabel, { color: currentTheme.text }]}>
+                  {t('seconds')}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* Timezone Change Notification */}
+        {timezoneChangedNotification && (
+          <View style={[styles.notification, styles.timezoneNotification, { backgroundColor: currentTheme.accent, borderColor: currentTheme.primary }]}>
+            <Text style={[styles.notificationText, { color: '#fff' }]}>
+              ⏳ 시간대가 변경되었습니다. 시간을 다시 계산했습니다.
+            </Text>
+          </View>
+        )}
+
+        {/* Background Sync Notification */}
+        {syncNotification && (
+          <View style={[styles.notification, styles.syncNotification, { backgroundColor: currentTheme.primary, borderColor: currentTheme.accent }]}>
+            <Text style={[styles.notificationText, { color: '#fff' }]}>
+              {syncNotification}
+            </Text>
+          </View>
+        )}
+
+        {/* Control Buttons */}
+        <View style={styles.buttonContainer}>
+          {!isActive ? (
+            <TouchableOpacity
+              style={[styles.button, styles.startButton, { backgroundColor: currentTheme.primary, borderColor: currentTheme.accent }]}
+              onPress={handleStart}
+              accessibilityLabel={t('startButton')}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.buttonText, styles.startButtonText]}>
+                ▶️ {t('startButton')}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.button, styles.stopButton, { backgroundColor: currentTheme.accent, borderColor: currentTheme.primary }]}
+              onPress={handleStop}
+              accessibilityLabel={t('stopButton')}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.buttonText, styles.stopButtonText]}>
+                ⏸️ {t('stopButton')}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Language Modal */}
+        <Modal
+          visible={showLanguageModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => safeSetState(setShowLanguageModal, false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: currentTheme.background }]}>
+              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>
+                {t('selectLanguage')}
+              </Text>
+              <FlatList
+                data={languages}
+                keyExtractor={(item) => item.code}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.languageItem, { backgroundColor: currentTheme.input }]}
+                    onPress={() => handleLanguageChange(item.code)}
+                  >
+                    <Text style={[styles.languageItemText, { color: currentTheme.text }]}>
+                      {item.name}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={[styles.closeButton, { backgroundColor: currentTheme.primary }]}
+                onPress={() => safeSetState(setShowLanguageModal, false)}
+              >
+                <Text style={styles.closeButtonText}>닫기</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Date Picker */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={selectedDate}
+            mode="date"
+            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+            onChange={handleDateChange}
+            maximumDate={new Date()}
+          />
+        )}
       </View>
     </ErrorBoundary>
   );
@@ -729,229 +796,247 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 20,
-    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 40,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
+    marginTop: 30,
+    paddingHorizontal: 10,
   },
   themeButton: {
-    padding: 10,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 48,
+    minHeight: 48,
     justifyContent: 'center',
     alignItems: 'center',
   },
   themeButtonText: {
     fontSize: 20,
   },
-  languageButton: {
-    padding: 10,
-    borderRadius: 20,
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
+  titleContainer: {
+    flex: 1,
     alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  subtitle: {
+    fontSize: 12,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+  languageButton: {
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   languageButtonText: {
-    fontSize: 20,
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 12,
   },
-  inputContainer: {
-    marginBottom: 20,
+  inputSection: {
+    marginBottom: 40,
+    paddingHorizontal: 10,
+  },
+  inputGroup: {
+    marginBottom: 25,
   },
   label: {
     fontSize: 16,
-    marginBottom: 5,
+    marginBottom: 8,
+    fontWeight: '500',
+    letterSpacing: 0.5,
   },
   input: {
-    padding: 15,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 16,
     fontSize: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(128, 128, 128, 0.3)',
+    minHeight: 56,
+    justifyContent: 'center',
   },
-  button: {
-    padding: 15,
-    borderRadius: 8,
+  inputWithBorder: {
+    borderWidth: 1.5,
+  },
+  inputText: {
+    fontSize: 16,
+    fontWeight: '400',
+  },
+  timeSection: {
     alignItems: 'center',
-    marginTop: 20,
+    marginBottom: 40,
+    paddingHorizontal: 10,
   },
-  buttonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  clockContainer: {
-    marginTop: 40,
+  timeHeader: {
     alignItems: 'center',
+    marginBottom: 24,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    width: '100%',
   },
-  clockTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
+  timeTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  philosophicalQuote: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   timeDisplay: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
     width: '100%',
-    marginBottom: 20,
   },
-  timeUnit: {
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  timeCard: {
     alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  timeNumber: {
-    fontSize: 36,
-    fontWeight: 'bold',
+  timeValue: {
+    fontSize: 24,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   timeLabel: {
-    fontSize: 14,
-    marginTop: 5,
+    fontSize: 11,
+    marginTop: 6,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  buttonContainer: {
+    alignItems: 'center',
+    marginTop: 30,
+    paddingHorizontal: 20,
+  },
+  button: {
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    borderRadius: 16,
+    borderWidth: 2,
+    minWidth: 160,
+    minHeight: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  startButton: {
+    // Additional styling for start button
+  },
+  stopButton: {
+    // Additional styling for stop button
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  startButtonText: {
+    // Additional styling for start button text
+  },
+  stopButtonText: {
+    // Additional styling for stop button text
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
-    borderRadius: 15,
-    padding: 20,
     width: '80%',
+    borderRadius: 10,
+    padding: 20,
     maxHeight: '60%',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 20,
   },
   languageItem: {
     padding: 15,
-    borderRadius: 8,
-    marginBottom: 5,
+    marginBottom: 10,
+    borderRadius: 5,
   },
-  languageText: {
+  languageItemText: {
     fontSize: 16,
     textAlign: 'center',
-  },
-  selectedLanguageText: {
-    fontWeight: 'bold',
   },
   closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
+    padding: 15,
+    borderRadius: 5,
     alignItems: 'center',
+    marginTop: 10,
   },
   closeButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  notificationButton: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 15,
-  },
-  notificationButtonText: {
+    color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  loadingContainer: {
-    justifyContent: 'center',
+  notification: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
+    zIndex: 1000,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
   },
-  loadingText: {
-    marginTop: 20,
-    fontSize: 16,
+  timezoneNotification: {
+    top: 100,
   },
-  datePickerInput: {
-    justifyContent: 'center',
+  syncNotification: {
+    top: 160,
   },
-  progressContainer: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  progressBar: {
-    height: 8,
-    borderRadius: 4,
-    width: '100%',
-    marginBottom: 10,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
+  notificationText: {
     fontSize: 14,
     fontWeight: '500',
-  },
-  exportButtonsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 15,
-    marginBottom: 10,
-  },
-  exportButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 0.45,
-  },
-  exportButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
     textAlign: 'center',
-  },
-  settingsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 10,
-    marginHorizontal: 20,
-  },
-  settingsButton: {
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    flex: 0.48,
-  },
-  settingsButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  sleepIndicator: {
-    marginTop: 10,
-    marginHorizontal: 20,
-    padding: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(128, 128, 128, 0.5)',
-  },
-  sleepIndicatorText: {
-    fontSize: 14,
-    fontWeight: '500',
+    letterSpacing: 0.3,
   },
 });
 
