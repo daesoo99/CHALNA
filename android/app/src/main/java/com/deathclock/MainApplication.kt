@@ -1,4 +1,4 @@
-package com.deathclock
+package com.kimdaesoo.deathclock
 
 import android.app.Application
 import com.facebook.react.PackageList
@@ -9,6 +9,7 @@ import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
+// AsyncStorage will be auto-linked
 
 class MainApplication : Application(), ReactApplication {
 
@@ -17,15 +18,15 @@ class MainApplication : Application(), ReactApplication {
         override fun getPackages(): List<ReactPackage> =
             PackageList(this).packages.apply {
               // Packages that cannot be autolinked yet can be added manually here, for example:
-              // add(MyReactNativePackage())
+              add(SharedPrefsPackage())
             }
 
         override fun getJSMainModuleName(): String = "index"
 
-        override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
+        override fun getUseDeveloperSupport(): Boolean = false
 
-        override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
-        override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
+        override val isNewArchEnabled: Boolean = false
+        override val isHermesEnabled: Boolean = true
       }
 
   override val reactHost: ReactHost

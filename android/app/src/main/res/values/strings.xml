@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Death Clock</string>
-    <string name="notification_channel_name">Death Clock Notifications</string>
+    <string name="app_name">CHALNA</string>
+    <string name="notification_channel_name">CHALNA Notifications</string>
     <string name="notification_channel_description">Daily reminders and milestone notifications</string>
 </resources>

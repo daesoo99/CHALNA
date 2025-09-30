@@ -27,7 +27,7 @@
 -keep class com.dieam.reactnativepushnotification.** { *; }
 
 # Keep our app classes
--keep class com.deathclock.** { *; }
+-keep class com.kimdaesoo.deathclock.** { *; }
 
 # Keep reflection-based classes
 -keepattributes Signature

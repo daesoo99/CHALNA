@@ -1,4 +1,4 @@
-package com.deathclock
+package com.kimdaesoo.deathclock
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

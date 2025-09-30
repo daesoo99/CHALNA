@@ -1,97 +1,151 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# ⏳ CHALNA
 
-# Getting Started
+**찰나(刹那) - Every Moment Matters**
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+CHALNA는 시간의 소중함을 깨닫게 해주는 철학적 시간 관리 앱입니다. 불교 철학의 "찰나" 개념을 현대적으로 해석하여, 매 순간을 의미있게 살도록 동기부여를 제공합니다.
 
-## Step 1: Start Metro
+## 🎯 핵심 철학
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+CHALNA는 "Memento Mori"(죽음을 기억하라)의 현대적 해석으로, 시간의 유한성을 통해 삶의 우선순위를 재정립하고 매 순간을 소중히 여기도록 돕습니다.
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## ✨ 주요 기능
 
-```sh
-# Using npm
+- **⏳ 실시간 생명 시계**: 생년월일과 예상 수명을 기반으로 남은 시간을 실시간 계산
+- **🎨 명상적 UI**: 따뜻한 골드 톤의 평온한 디자인
+- **🌍 다국어 지원**: 한국어, 영어, 일본어, 중국어
+- **🌙 테마 지원**: 다크/라이트 테마 전환
+- **📱 위젯 지원**: Android 홈 화면 위젯
+- **🔔 알림 시스템**: 마일스톤 및 일일 알림
+- **♿ 접근성**: 스크린 리더 및 접근성 최적화
+
+## 🚀 기술 스택
+
+- **React Native 0.73+**
+- **TypeScript**
+- **i18next** (다국어)
+- **AsyncStorage** (로컬 저장)
+- **React Native Push Notification**
+
+## 📱 지원 플랫폼
+
+- Android (API 21+)
+- iOS (iOS 12+) - 예정
+
+## 🛠 개발 환경 설정
+
+### 필수 요구사항
+- Node.js 18+
+- React Native CLI
+- Android Studio (Android 개발)
+- JDK 17+
+
+### 설치 및 실행
+
+```bash
+# 의존성 설치
+npm install
+
+# Metro 번들러 시작
 npm start
 
-# OR using Yarn
-yarn start
+# Android 빌드 및 실행
+npx react-native run-android
+
+# iOS 빌드 및 실행 (macOS만)
+npx react-native run-ios
 ```
 
-## Step 2: Build and run your app
+### 빌드
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+```bash
+# Android Debug APK
+cd android && ./gradlew assembleDebug
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+# Android Release AAB (Play Store용)
+cd android && ./gradlew bundleRelease
 ```
 
-### iOS
+## 🌍 다국어 지원
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+```bash
+# 다국어 파일 동기화
+npm run i18n:sync
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+# 자동 번역 동기화 시작
+npm run start-auto-i18n
 ```
 
-Then, and every time you update your native dependencies, run:
+## 📄 앱 구조
 
-```sh
-bundle exec pod install
+```
+src/
+├── App.tsx                 # 메인 앱 컴포넌트
+├── themes.ts              # 테마 설정
+├── i18n.ts               # 다국어 설정
+├── SecurityAuditor.ts    # 입력 검증
+├── StorageManager.ts     # 로컬 저장소 관리
+├── CrashReporter.ts      # 오류 보고
+├── ErrorBoundary.tsx     # 오류 경계
+└── locales/              # 다국어 파일
+    ├── ko.json           # 한국어
+    ├── en.json           # 영어
+    ├── ja.json           # 일본어
+    └── zh.json           # 중국어
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+## 🎨 브랜딩 변화
 
-```sh
-# Using npm
-npm run ios
+### 이전 (Death Clock)
+- 💀 어두운 해골 테마
+- 부정적 연상
+- 죽음에 초점
 
-# OR using Yarn
-yarn ios
-```
+### 현재 (CHALNA)
+- ⏳ 따뜻한 모래시계 테마
+- 철학적 깊이
+- 시간의 소중함에 초점
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## 📊 성능 최적화
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+- **React.memo** 및 **useCallback** 활용
+- **useMemo**로 비용이 큰 계산 최적화
+- 메모리 누수 방지를 위한 cleanup 로직
+- 백그라운드 상태 최적화
 
-## Step 3: Modify your app
+## 🔒 보안 및 개인정보
 
-Now that you have successfully run the app, let's make changes!
+- 모든 데이터 로컬 저장
+- 네트워크 통신 없음
+- 개인정보 수집 최소화
+- GDPR 및 개인정보보호법 준수
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+## 📱 Google Play Store 출시 준비
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+- ✅ 콘텐츠 정책 준수 (민감성 이슈 해결)
+- ✅ 다국어 지원
+- ✅ 접근성 최적화
+- ✅ 개인정보처리방침 완비
+- ✅ Teen(13+) 등급 적합
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+## 🤝 기여하기
 
-## Congratulations! :tada:
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open Pull Request
 
-You've successfully run and modified your React Native App. :partying_face:
+## 📄 라이선스
 
-### Now what?
+이 프로젝트는 MIT 라이선스 하에 배포됩니다.
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## 📞 연락처
 
-# Troubleshooting
+- 개발자: Kim Daesoo
+- 프로젝트: CHALNA
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+---
 
-# Learn More
+**"찰나의 소중함을 느끼세요" - CHALNA**
 
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+> 매 순간이 새로운 시작입니다. CHALNA와 함께 시간의 진정한 가치를 발견하세요.

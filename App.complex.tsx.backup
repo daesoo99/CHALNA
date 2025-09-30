@@ -1,0 +1,1519 @@
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  Alert,
+  Modal,
+  FlatList,
+  Platform,
+  ActivityIndicator,
+  AppState,
+} from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { useTranslation } from 'react-i18next';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { darkTheme, lightTheme, Theme } from './themes';
+import NotificationService from './NotificationService';
+import ErrorBoundary from './ErrorBoundary';
+import Analytics from './Analytics';
+import SimpleMilestoneManager from './MilestoneManager';
+import CrashReporter from './CrashReporter';
+import { storageManager } from './StorageManager';
+import HapticFeedback from 'react-native-haptic-feedback';
+import InputValidator from './InputValidator';
+import SecurityAuditor from './SecurityAuditor';
+import './i18n';
+
+const App = memo(() => {
+  console.log('🚀 App component rendering...');
+  const { t, i18n } = useTranslation();
+  const [birthDate, setBirthDate] = useState('');
+  const [lifeExpectancy, setLifeExpectancy] = useState('80');
+  const [timeLeft, setTimeLeft] = useState({
+    years: 0,
+    months: 0,
+    days: 0,
+    hours: 0,
+    minutes: 0,
+    seconds: 0,
+  });
+  const [isActive, setIsActive] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
+  const [currentTheme, setCurrentTheme] = useState<Theme>(darkTheme);
+  const [showNotification, setShowNotification] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [isLoading, setIsLoading] = useState(true);
+  const [appState, setAppState] = useState(AppState.currentState);
+
+  const languages = [
+    { code: 'ko', name: '한국어' },
+    { code: 'en', name: 'English' },
+    { code: 'ja', name: '日本語' },
+    { code: 'zh', name: '中文' },
+  ];
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null;
+
+    if (isActive && birthDate) {
+      interval = setInterval(() => {
+        calculateTimeLeft();
+      }, 1000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+        interval = null;
+      }
+    };
+  }, [isActive, birthDate, lifeExpectancy]); // Removed calculateTimeLeft from deps to prevent frequent recreations
+
+  useEffect(() => {
+    const initializeApp = async () => {
+      const startTime = Date.now();
+
+      try {
+        console.log('🔄 Initializing Death Clock app...');
+
+        // Initialize core error handling systems first
+        const crashReporter = CrashReporter.getInstance({
+          enableNetworkReporting: true,
+          enableAnalytics: true,
+          debugMode: __DEV__,
+          maxRetries: 3
+        });
+
+        // Setup comprehensive global error handlers
+        crashReporter.setupGlobalErrorHandler();
+
+        // Update user context for better error reporting
+        crashReporter.updateUserContext({
+          lastAction: 'app_initialization',
+          currentScreen: 'loading',
+          userState: 'active'
+        });
+
+        // Initialize storage manager with error handling
+        console.log('🗃️ Initializing storage systems...');
+
+        // Setup error handlers for AsyncStorage operations
+        const originalAsyncStorageGet = AsyncStorage.getItem;
+        const originalAsyncStorageSet = AsyncStorage.setItem;
+        const originalAsyncStorageRemove = AsyncStorage.removeItem;
+
+        // Wrap AsyncStorage methods with enhanced error handling
+        AsyncStorage.getItem = async (key: string) => {
+          try {
+            return await storageManager.get(key, {
+              timeout: 5000,
+              retries: 2,
+              enableValidation: true,
+              enableSecurity: true,
+              onError: (error) => {
+                crashReporter.reportCrash(new Error(`Storage get failed for key: ${key}`), undefined, {
+                  category: 'STORAGE',
+                  severity: error.severity,
+                  recoverable: error.recoverable
+                });
+              }
+            });
+          } catch (error) {
+            console.warn(`Fallback to original AsyncStorage.getItem for key: ${key}`);
+            return await originalAsyncStorageGet(key);
+          }
+        };
+
+        AsyncStorage.setItem = async (key: string, value: string) => {
+          try {
+            await storageManager.set(key, value, {
+              timeout: 5000,
+              retries: 2,
+              enableValidation: true,
+              enableSecurity: true,
+              onError: (error) => {
+                crashReporter.reportCrash(new Error(`Storage set failed for key: ${key}`), undefined, {
+                  category: 'STORAGE',
+                  severity: error.severity,
+                  recoverable: error.recoverable
+                });
+              }
+            });
+          } catch (error) {
+            console.warn(`Fallback to original AsyncStorage.setItem for key: ${key}`);
+            return await originalAsyncStorageSet(key, value);
+          }
+        };
+
+        AsyncStorage.removeItem = async (key: string) => {
+          try {
+            await storageManager.remove(key, {
+              timeout: 5000,
+              retries: 2,
+              onError: (error) => {
+                crashReporter.reportCrash(new Error(`Storage remove failed for key: ${key}`), undefined, {
+                  category: 'STORAGE',
+                  severity: error.severity,
+                  recoverable: error.recoverable
+                });
+              }
+            });
+          } catch (error) {
+            console.warn(`Fallback to original AsyncStorage.removeItem for key: ${key}`);
+            return await originalAsyncStorageRemove(key);
+          }
+        };
+
+        // Initialize app components with individual error handling
+        const initializationTasks = [
+          {
+            name: 'Theme Loading',
+            task: () => loadTheme(),
+            critical: false
+          },
+          {
+            name: 'Data Loading',
+            task: () => loadSavedData(),
+            critical: true
+          },
+          {
+            name: 'Notification Permissions',
+            task: async () => {
+              const hasPermission = await NotificationService.requestPermissions();
+              console.log('Notification permission status:', hasPermission);
+              return hasPermission;
+            },
+            critical: false
+          },
+          {
+            name: 'Analytics Session',
+            task: () => Analytics.initializeSession(),
+            critical: false
+          },
+          {
+            name: 'Storage Health Check',
+            task: () => storageManager.validateStorageHealth(),
+            critical: false
+          },
+          {
+            name: 'Security Audit',
+            task: () => SecurityAuditor.getInstance().auditStorageData(),
+            critical: false
+          }
+        ];
+
+        // Execute initialization tasks with individual error handling
+        const results = await Promise.allSettled(
+          initializationTasks.map(async ({ name, task, critical }) => {
+            try {
+              console.log(`⚙️ Initializing ${name}...`);
+              const result = await task();
+              console.log(`✅ ${name} initialized successfully`);
+              return { name, success: true, result };
+            } catch (error) {
+              console.error(`❌ ${name} initialization failed:`, error);
+
+              crashReporter.reportCrash(error as Error, undefined, {
+                category: 'INITIALIZATION',
+                severity: critical ? 'HIGH' : 'MEDIUM',
+                recoverable: !critical,
+                userContext: {
+                  lastAction: `initialize_${name.toLowerCase().replace(' ', '_')}`,
+                  currentScreen: 'loading'
+                }
+              });
+
+              if (critical) {
+                throw error;
+              }
+
+              return { name, success: false, error };
+            }
+          })
+        );
+
+        // Check for critical failures
+        const failures = results
+          .map((result, index) => ({ result, task: initializationTasks[index] }))
+          .filter(({ result, task }) => result.status === 'rejected' && task.critical);
+
+        if (failures.length > 0) {
+          throw new Error(`Critical initialization failures: ${failures.map(f => f.task.name).join(', ')}`);
+        }
+
+        // Log successful initialization
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const totalTime = Date.now() - startTime;
+
+        console.log(`🎉 App initialization completed: ${successCount}/${results.length} tasks successful in ${totalTime}ms`);
+
+        // Update user context
+        crashReporter.updateUserContext({
+          lastAction: 'app_initialized',
+          currentScreen: 'main',
+          sessionDuration: totalTime
+        });
+
+      } catch (error) {
+        console.error('🚨 Critical app initialization error:', error);
+
+        const crashReporter = CrashReporter.getInstance();
+        crashReporter.reportCrash(error as Error, undefined, {
+          category: 'INITIALIZATION',
+          severity: 'CRITICAL',
+          recoverable: false,
+          userContext: {
+            lastAction: 'app_initialization_failed',
+            currentScreen: 'error'
+          }
+        });
+
+        // Show user-friendly error message
+        Alert.alert(
+          t('initializationError') || 'Initialization Error',
+          t('initializationErrorMessage') || 'The app failed to initialize properly. Please restart the app.',
+          [
+            {
+              text: t('restart') || 'Restart',
+              onPress: () => {
+                // In a real app, you might use a restart library or reload functionality
+                setIsLoading(true);
+                setTimeout(() => initializeApp(), 1000);
+              }
+            }
+          ]
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeApp();
+  }, [t]);
+
+  useEffect(() => {
+    setCurrentTheme(isDarkTheme ? darkTheme : lightTheme);
+  }, [isDarkTheme]);
+
+  useEffect(() => {
+    if (isActive && showNotification && birthDate) {
+      // For Android, start the native service with user data
+      // For iOS, update the React Native notification
+      NotificationService.startNotificationService(birthDate, parseInt(lifeExpectancy, 10));
+      NotificationService.updateNotification(timeLeft, t);
+    } else {
+      NotificationService.cancelNotification();
+    }
+  }, [timeLeft, showNotification, isActive, birthDate, lifeExpectancy, t]);
+
+  useEffect(() => {
+    const handleAppStateChange = (nextAppState: string) => {
+      try {
+        const crashReporter = CrashReporter.getInstance();
+
+        // Update user context for better error tracking
+        crashReporter.updateUserContext({
+          lastAction: `app_state_change_${nextAppState}`,
+          currentScreen: 'main',
+          userState: nextAppState as 'active' | 'background' | 'inactive'
+        });
+
+        if (appState.match(/inactive|background/) && nextAppState === 'active') {
+          console.log('🔄 App returning to foreground');
+
+          // Safely recalculate time when app returns to foreground
+          if (isActive) {
+            try {
+              calculateTimeLeft();
+            } catch (error) {
+              console.error('Error recalculating time on app resume:', error);
+              crashReporter.reportCrash(error as Error, undefined, {
+                category: 'TIMER',
+                severity: 'MEDIUM',
+                recoverable: true,
+                userContext: {
+                  lastAction: 'recalculate_time_on_resume'
+                }
+              });
+            }
+          }
+
+          // Validate storage health after returning from background
+          storageManager.validateStorageHealth().then(health => {
+            if (!health.isHealthy) {
+              console.warn('Storage health issues detected after app resume:', health.issues);
+            }
+          }).catch(error => {
+            console.error('Storage health check failed:', error);
+          });
+
+        } else if (nextAppState === 'background') {
+          console.log('📱 App going to background');
+
+          // App going to background - ensure proper cleanup
+          try {
+            Analytics.trackSessionEnd();
+          } catch (error) {
+            console.error('Error tracking session end:', error);
+            crashReporter.reportCrash(error as Error, undefined, {
+              category: 'ANALYTICS',
+              severity: 'LOW',
+              recoverable: true,
+              userContext: {
+                lastAction: 'track_session_end'
+              }
+            });
+          }
+
+          // Save current state before going to background
+          try {
+            saveData().catch(error => {
+              console.error('Error saving data before background:', error);
+            });
+          } catch (error) {
+            console.error('Error initiating data save:', error);
+          }
+        }
+
+        setAppState(nextAppState);
+
+      } catch (error) {
+        console.error('Critical error in app state change handler:', error);
+        const crashReporter = CrashReporter.getInstance();
+        crashReporter.reportCrash(error as Error, undefined, {
+          category: 'GLOBAL',
+          severity: 'HIGH',
+          recoverable: true,
+          userContext: {
+            lastAction: 'app_state_change_handler',
+            currentScreen: 'main'
+          }
+        });
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+    return () => {
+      try {
+        subscription?.remove();
+      } catch (error) {
+        console.error('Error removing app state listener:', error);
+      }
+    };
+  }, [appState, isActive, calculateTimeLeft, saveData]); // Added dependencies for proper error handling
+
+
+
+  // Comprehensive cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup all timers and resources when component unmounts
+      console.log('App component unmounting - cleaning up all resources...');
+
+      // Stop any active timers
+      if (isActive) {
+        NotificationService.cancelAllNotifications();
+      }
+
+      // Cleanup services
+      NotificationService.destroy();
+      Analytics.cleanup();
+
+      console.log('App cleanup completed');
+    };
+  }, []); // Empty deps - only runs on unmount
+
+
+
+  const resetDeathClock = async () => {
+    Alert.alert(
+      t('resetConfirmTitle') || 'Reset Death Clock',
+      t('resetConfirmMessage') || 'Are you sure you want to start over? This will reset your countdown and milestones.',
+      [
+        {
+          text: t('cancel') || 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: t('reset') || 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Stop current timer
+              setIsActive(false);
+              NotificationService.stopNotificationService();
+              NotificationService.cancelNotification();
+
+              // Clear saved state
+              await AsyncStorage.multiRemove(['isActive', 'timerStartedAt', 'birthDate', 'lifeExpectancy']);
+
+              // Reset form state
+              setBirthDate('');
+              setLifeExpectancy('80');
+              setSelectedDate(new Date());
+              setTimeLeft({
+                years: 0,
+                months: 0,
+                days: 0,
+                hours: 0,
+                minutes: 0,
+                seconds: 0,
+              });
+
+              await Analytics.trackReset();
+
+              console.log('🔄 Death Clock reset completed');
+
+              Alert.alert(
+                t('resetComplete') || 'Reset Complete',
+                t('resetCompleteMessage') || 'Your Death Clock has been reset. Start your new countdown.',
+                [{ text: t('acknowledge'), style: 'default' }]
+              );
+            } catch (error) {
+              console.error('Error resetting Death Clock:', error);
+              Alert.alert(
+                t('resetError') || 'Reset Error',
+                t('resetErrorMessage') || 'Failed to reset the Death Clock. Please try again.',
+                [{ text: t('acknowledge'), style: 'default' }]
+              );
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const expectedDeathDate = useMemo(() => {
+    if (!birthDate) return null;
+    const birth = new Date(birthDate);
+    const expectedLifeYears = parseInt(lifeExpectancy, 10);
+
+    // Handle leap year birthdays (Feb 29)
+    let targetYear = birth.getFullYear() + expectedLifeYears;
+    let targetMonth = birth.getMonth();
+    let targetDate = birth.getDate();
+
+    // If birthday is Feb 29 and target year is not leap year, use Feb 28
+    if (targetMonth === 1 && targetDate === 29) {
+      const isTargetLeapYear = (targetYear % 4 === 0 && targetYear % 100 !== 0) || (targetYear % 400 === 0);
+      if (!isTargetLeapYear) {
+        targetDate = 28;
+      }
+    }
+
+    return new Date(targetYear, targetMonth, targetDate);
+  }, [birthDate, lifeExpectancy]);
+
+  const finalDeathDate = expectedDeathDate;
+
+  const lifeProgress = useMemo(() => {
+    if (!birthDate || !expectedDeathDate) return 0;
+
+    const birth = new Date(birthDate);
+    const now = new Date();
+    const totalLife = expectedDeathDate.getTime() - birth.getTime();
+    const lived = now.getTime() - birth.getTime();
+
+    return Math.min(Math.max((lived / totalLife) * 100, 0), 100);
+  }, [birthDate, expectedDeathDate]);
+
+  const calculateTimeLeft = useCallback(() => {
+    if (!birthDate || !finalDeathDate) return;
+
+    const now = new Date();
+
+    if (finalDeathDate <= now) {
+      setTimeLeft({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
+      Alert.alert(t('timeOverTitle'), t('timeOverMessage'));
+      setIsActive(false);
+      return;
+    }
+
+    // Check milestones before calculating time
+    SimpleMilestoneManager.checkMilestones(t);
+
+    // Use a more reliable calculation method
+    let years = finalDeathDate.getFullYear() - now.getFullYear();
+    let months = finalDeathDate.getMonth() - now.getMonth();
+    let days = finalDeathDate.getDate() - now.getDate();
+
+    // Adjust if day is negative
+    if (days < 0) {
+      months--;
+      // Get days in previous month
+      const prevMonth = new Date(expectedDeathDate.getFullYear(), expectedDeathDate.getMonth(), 0);
+      days += prevMonth.getDate();
+    }
+
+    // Adjust if month is negative
+    if (months < 0) {
+      years--;
+      months += 12;
+    }
+
+    // Calculate remaining time for hours, minutes, seconds
+    const todayAtTargetTime = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      finalDeathDate.getHours(),
+      finalDeathDate.getMinutes(),
+      finalDeathDate.getSeconds()
+    );
+
+    const remainingMillis = finalDeathDate.getTime() - now.getTime();
+    const remainingToday = todayAtTargetTime.getTime() - now.getTime();
+
+    let hours = Math.floor((remainingToday % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    let minutes = Math.floor((remainingToday % (1000 * 60 * 60)) / (1000 * 60));
+    let seconds = Math.floor((remainingToday % (1000 * 60)) / 1000);
+
+    // If target time has passed today, adjust for tomorrow
+    if (remainingToday < 0) {
+      hours = 24 + hours;
+      minutes = Math.floor((remainingMillis % (1000 * 60 * 60)) / (1000 * 60));
+      seconds = Math.floor((remainingMillis % (1000 * 60)) / 1000);
+    }
+
+    // Ensure non-negative values
+    setTimeLeft({
+      years: Math.max(0, years),
+      months: Math.max(0, months),
+      days: Math.max(0, days),
+      hours: Math.max(0, hours),
+      minutes: Math.max(0, minutes),
+      seconds: Math.max(0, seconds)
+    });
+  }, [birthDate, finalDeathDate, t, expectedDeathDate]);
+
+  const startClock = async () => {
+    HapticFeedback.trigger('impactMedium');
+
+    // Enhanced validation using InputValidator
+    const birthDateValidation = InputValidator.validateBirthDate(birthDate, {
+      allowFuture: false,
+      minAge: 0,
+      maxAge: 150
+    });
+
+    if (!birthDateValidation.isValid) {
+      InputValidator.showValidationError(t('errorTitle'), birthDateValidation, t);
+      return;
+    }
+
+    const currentAge = InputValidator.calculatePreciseAge(new Date(birthDate)).years;
+    const lifeExpectancyValidation = InputValidator.validateLifeExpectancy(lifeExpectancy, {
+      minValue: 1,
+      maxValue: 150,
+      currentAge,
+      allowBelowAge: false
+    });
+
+    if (!lifeExpectancyValidation.isValid) {
+      InputValidator.showValidationError(t('errorTitle'), lifeExpectancyValidation, t);
+      return;
+    }
+
+    // Show warnings if any
+    const allWarnings = [
+      ...(birthDateValidation.warnings || []),
+      ...(lifeExpectancyValidation.warnings || [])
+    ];
+
+    if (allWarnings.length > 0) {
+      Alert.alert(
+        t('warningTitle') || 'Warning',
+        allWarnings.join('\n'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('continue') || 'Continue',
+            onPress: async () => {
+              await saveData();
+              await Analytics.trackTimerStart(lifeExpectancyValidation.sanitizedValue!);
+              setIsActive(true);
+              calculateTimeLeft();
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    await saveData();
+    await Analytics.trackTimerStart(lifeExpectancyValidation.sanitizedValue!);
+
+    // Set first calculation date for milestone system if this is the first time
+    await SimpleMilestoneManager.setFirstCalculationDate();
+
+    setIsActive(true);
+    calculateTimeLeft();
+  };
+
+  const stopClock = async () => {
+    HapticFeedback.trigger('impactLight');
+    setIsActive(false);
+    NotificationService.stopNotificationService();
+    NotificationService.cancelNotification();
+
+    // Save the stopped state immediately
+    try {
+      await AsyncStorage.setItem('isActive', 'false');
+      await AsyncStorage.removeItem('timerStartedAt');
+      console.log('⏹️ Timer stopped and state saved');
+    } catch (error) {
+      console.error('Error saving stopped timer state:', error);
+    }
+  };
+
+  const toggleNotification = async () => {
+    const newState = !showNotification;
+
+    if (newState) {
+      // Check permission before enabling notifications
+      const hasPermission = await NotificationService.checkPermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          t('permissionRequired') || 'Permission Required',
+          t('notificationPermissionMessage') || 'Notification permission is required to show persistent countdown. Please grant permission in settings.',
+          [
+            {
+              text: t('cancel') || 'Cancel',
+              style: 'cancel'
+            },
+            {
+              text: t('openSettings') || 'Open Settings',
+              onPress: async () => {
+                await NotificationService.requestPermissions();
+              }
+            }
+          ]
+        );
+        return;
+      }
+    }
+
+    setShowNotification(newState);
+
+    if (!newState) {
+      NotificationService.cancelNotification();
+    }
+  };
+
+  const changeLanguage = async (langCode: string) => {
+    i18n.changeLanguage(langCode);
+    await Analytics.trackLanguageChange();
+    setShowLanguageModal(false);
+  };
+
+  const onDateChange = (event: any, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      // Enhanced validation using InputValidator with comprehensive checks
+      const validation = InputValidator.validateBirthDate(date, {
+        allowFuture: false,
+        minAge: 0,
+        maxAge: 150,
+        allowLeapYear: true,
+        allowTimezone: true,
+        requirePrecision: true,
+        allowWeekends: true
+      });
+
+      // Additional date picker specific validations
+      const now = new Date();
+      const timeDiff = now.getTime() - date.getTime();
+      const daysDiff = Math.floor(timeDiff / (1000 * 60 * 60 * 24));
+
+      // Check for dates that are too recent (might be accidents)
+      if (daysDiff < 365 && daysDiff > 0) {
+        Alert.alert(
+          t('confirmRecentDate') || 'Confirm Recent Date',
+          t('dateVeryRecent') || 'The selected date is less than a year ago. Are you sure this is your birth date?',
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('confirm') || 'Confirm',
+              onPress: () => processValidatedDate(date, validation)
+            }
+          ]
+        );
+        return;
+      }
+
+      // Check for exact current date (likely an error)
+      if (daysDiff === 0) {
+        Alert.alert(
+          t('errorTitle'),
+          t('birthDateCannotBeToday') || 'Birth date cannot be today. Please select your actual birth date.',
+          [{ text: t('acknowledge'), style: 'default' }]
+        );
+        return;
+      }
+
+      // Check for future dates
+      if (timeDiff < 0) {
+        Alert.alert(
+          t('errorTitle'),
+          t('birthDateInFuture') || 'Birth date cannot be in the future. Please select a valid birth date.',
+          [{ text: t('acknowledge'), style: 'default' }]
+        );
+        return;
+      }
+
+      if (!validation.isValid) {
+        InputValidator.showValidationError(
+          t('errorTitle'),
+          validation,
+          t,
+          true,
+          true,
+          () => setShowDatePicker(true)
+        );
+        return;
+      }
+
+      processValidatedDate(date, validation);
+    }
+  };
+
+  const processValidatedDate = (date: Date, validation: any) => {
+    // Show warnings if any
+    if (validation.warnings && validation.warnings.length > 0) {
+      Alert.alert(
+        t('warningTitle') || 'Warning',
+        validation.warnings.join('\n'),
+        [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('continue') || 'Continue',
+            onPress: () => {
+              setSelectedDate(date);
+              setBirthDate(validation.sanitizedValue!);
+              Analytics.trackBirthdateSet();
+
+              // Provide helpful feedback
+              const age = InputValidator.calculatePreciseAge(date);
+              console.log(`Birth date set: ${validation.sanitizedValue}, Age: ${age.years} years`);
+            }
+          }
+        ]
+      );
+      return;
+    }
+
+    setSelectedDate(date);
+    setBirthDate(validation.sanitizedValue!);
+    Analytics.trackBirthdateSet();
+
+    // Provide helpful feedback
+    const age = InputValidator.calculatePreciseAge(date);
+    console.log(`Birth date set: ${validation.sanitizedValue}, Age: ${age.years} years`);
+  };
+
+  const showDatePickerModal = () => {
+    setShowDatePicker(true);
+  };
+
+  const loadTheme = async () => {
+    try {
+      const savedTheme = await AsyncStorage.getItem('theme');
+      if (savedTheme !== null) {
+        const themeValidation = InputValidator.validateStorageData('theme', savedTheme);
+        if (themeValidation.isValid) {
+          const isThemeDark = themeValidation.sanitizedValue === 'dark';
+          setIsDarkTheme(isThemeDark);
+        } else {
+          console.warn('Invalid theme in storage:', themeValidation.error);
+          // Clear invalid data and use default
+          await AsyncStorage.removeItem('theme');
+          setIsDarkTheme(true); // Default to dark theme
+        }
+      }
+    } catch (error) {
+      console.log('Error loading theme:', error);
+    }
+  };
+
+  const loadSavedData = async () => {
+    try {
+      // Get all storage keys for comprehensive validation
+      const keys = await AsyncStorage.getAllKeys();
+      const storageData: Record<string, string> = {};
+
+      // Load all relevant data including isActive state
+      for (const key of keys) {
+        if (['birthDate', 'lifeExpectancy', 'theme', 'language', 'isActive', 'timerStartedAt'].includes(key)) {
+          const value = await AsyncStorage.getItem(key);
+          if (value) {
+            storageData[key] = value;
+          }
+        }
+      }
+
+      // Comprehensive storage validation
+      const consistencyCheck = await InputValidator.validateStorageConsistency(storageData);
+
+      if (!consistencyCheck.isValid) {
+        console.warn('Storage consistency issues detected:', consistencyCheck.error);
+
+        // Show user-friendly message about data issues
+        Alert.alert(
+          t('dataIssueTitle') || 'Data Issue Detected',
+          t('dataIssueMessage') || 'Some saved data appears to be corrupted. The app will reset to safe defaults.',
+          [
+            {
+              text: t('understand') || 'I Understand',
+              onPress: () => {
+                // Clear problematic data and set defaults
+                clearCorruptedData();
+              }
+            }
+          ]
+        );
+        return;
+      }
+
+      // Process validated data
+      if (consistencyCheck.sanitizedValue) {
+        const validatedData = consistencyCheck.sanitizedValue;
+
+        if (validatedData.birthDate) {
+          setBirthDate(validatedData.birthDate);
+          setSelectedDate(new Date(validatedData.birthDate));
+        }
+
+        if (validatedData.lifeExpectancy) {
+          setLifeExpectancy(validatedData.lifeExpectancy.toString());
+        }
+
+        // Restore timer active state and auto-resume if it was running
+        if (validatedData.isActive === 'true' && validatedData.birthDate) {
+          console.log('🔄 Restoring active timer state from previous session');
+          setIsActive(true);
+
+          // Calculate time immediately and start interval for continuous countdown
+          // This ensures the user sees the countdown right away
+          setTimeout(() => {
+            calculateTimeLeft();
+          }, 10); // Very short delay to ensure states are set
+        }
+      }
+
+      // Show warnings if any
+      if (consistencyCheck.warnings && consistencyCheck.warnings.length > 0) {
+        console.warn('Storage warnings:', consistencyCheck.warnings);
+      }
+
+    } catch (error) {
+      console.log('Error loading saved data:', error);
+      const crashReporter = CrashReporter.getInstance();
+      crashReporter.reportCrash(error as Error, 'Data Loading');
+
+      // Fallback to safe defaults
+      await clearCorruptedData();
+    }
+  };
+
+  const clearCorruptedData = async () => {
+    try {
+      // Clear potentially corrupted data
+      await AsyncStorage.multiRemove(['birthDate', 'lifeExpectancy']);
+
+      // Reset to safe defaults
+      setBirthDate('');
+      setLifeExpectancy('80');
+      setSelectedDate(new Date());
+
+      console.log('Cleared corrupted data and reset to defaults');
+    } catch (error) {
+      console.error('Failed to clear corrupted data:', error);
+    }
+  };
+
+  const saveData = async () => {
+    try {
+      // Validate data before saving with comprehensive checks
+      const birthDateValidation = InputValidator.validateBirthDate(birthDate, {
+        allowFuture: false,
+        requirePrecision: true
+      });
+      const lifeExpectancyValidation = InputValidator.validateLifeExpectancy(lifeExpectancy, {
+        currentAge: birthDate ? InputValidator.calculatePreciseAge(new Date(birthDate)).years : 0
+      });
+
+      const dataToSave: Array<[string, string]> = [];
+      const validationErrors: string[] = [];
+
+      if (birthDateValidation.isValid && birthDateValidation.sanitizedValue) {
+        // Additional security check before saving
+        const securityAudit = SecurityAuditor.auditInput(birthDateValidation.sanitizedValue, 'birthDate');
+        if (securityAudit.isSecure) {
+          dataToSave.push(['birthDate', birthDateValidation.sanitizedValue]);
+        } else {
+          validationErrors.push('Birth date failed security validation');
+        }
+      } else if (birthDateValidation.error) {
+        validationErrors.push(`Birth date: ${birthDateValidation.error}`);
+      }
+
+      if (lifeExpectancyValidation.isValid && lifeExpectancyValidation.sanitizedValue) {
+        const lifeExpectancyStr = lifeExpectancyValidation.sanitizedValue.toString();
+        const securityAudit = SecurityAuditor.auditInput(lifeExpectancyStr, 'lifeExpectancy');
+        if (securityAudit.isSecure) {
+          dataToSave.push(['lifeExpectancy', lifeExpectancyStr]);
+        } else {
+          validationErrors.push('Life expectancy failed security validation');
+        }
+      } else if (lifeExpectancyValidation.error) {
+        validationErrors.push(`Life expectancy: ${lifeExpectancyValidation.error}`);
+      }
+
+      if (validationErrors.length > 0) {
+        console.warn('Data validation errors during save:', validationErrors);
+        return;
+      }
+
+      // Also save the current timer state for persistence
+      dataToSave.push(['isActive', isActive.toString()]);
+      if (isActive) {
+        dataToSave.push(['timerStartedAt', new Date().toISOString()]);
+      }
+
+      // Save validated data atomically
+      if (dataToSave.length > 0) {
+        await AsyncStorage.multiSet(dataToSave);
+        console.log('Data saved successfully with validation (including timer state)');
+      }
+
+    } catch (error) {
+      console.log('Error saving data:', error);
+      const crashReporter = CrashReporter.getInstance();
+      crashReporter.reportCrash(error as Error, 'Data Saving');
+
+      // Show user-friendly error message
+      Alert.alert(
+        t('saveErrorTitle') || 'Save Error',
+        t('saveErrorMessage') || 'Unable to save your data. Please try again.',
+        [{ text: t('acknowledge'), style: 'default' }]
+      );
+    }
+  };
+
+  const toggleTheme = async () => {
+    HapticFeedback.trigger('selection');
+    try {
+      const newTheme = !isDarkTheme;
+      setIsDarkTheme(newTheme);
+      await AsyncStorage.setItem('theme', newTheme ? 'dark' : 'light');
+      await Analytics.trackThemeChange();
+    } catch (error) {
+      console.log('Error saving theme:', error);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer, { backgroundColor: currentTheme.backgroundColor }]}>
+        <StatusBar
+          barStyle={currentTheme.statusBarStyle}
+          backgroundColor={currentTheme.backgroundColor}
+        />
+        <ActivityIndicator size="large" color={currentTheme.primaryColor} />
+        <Text style={[styles.loadingText, { color: currentTheme.textColor }]}>{t('loading')}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ErrorBoundary>
+      <View style={[styles.container, { backgroundColor: currentTheme.backgroundColor }]}>
+        <StatusBar
+          barStyle={currentTheme.statusBarStyle}
+          backgroundColor={currentTheme.backgroundColor}
+        />
+
+        <View style={styles.header}>
+        <TouchableOpacity
+          style={[styles.themeButton, { backgroundColor: currentTheme.languageButtonBackground }]}
+          onPress={toggleTheme}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={isDarkTheme ? t('switchToLight') : t('switchToDark')}
+          accessibilityHint={t('toggleThemeHint')}
+        >
+          <Text style={styles.themeButtonText}>{isDarkTheme ? '☀️' : '🌙'}</Text>
+        </TouchableOpacity>
+
+        <Text style={[styles.title, { color: currentTheme.textColor }]}>{t('title')}</Text>
+
+        <TouchableOpacity
+          style={[styles.languageButton, { backgroundColor: currentTheme.languageButtonBackground }]}
+          onPress={() => setShowLanguageModal(true)}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={t('selectLanguage')}
+          accessibilityHint={t('selectLanguageHint')}
+        >
+          <Text style={styles.languageButtonText}>🌐</Text>
+        </TouchableOpacity>
+      </View>
+      
+      {!isActive && (
+        <>
+          <View style={styles.inputContainer}>
+            <Text style={[styles.label, { color: currentTheme.textColor }]}>{t('birthDateLabel')}</Text>
+            <TouchableOpacity
+              style={[styles.input, styles.datePickerInput, {
+                backgroundColor: currentTheme.inputBackground
+              }]}
+              onPress={showDatePickerModal}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('birthDateLabel')}: ${birthDate || t('birthDatePlaceholder')}`}
+              accessibilityHint={t('selectBirthDateHint')}
+            >
+              <Text style={[{ color: birthDate ? currentTheme.textColor : currentTheme.placeholderColor }]}>
+                {birthDate || t('birthDatePlaceholder')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={[styles.label, { color: currentTheme.textColor }]}>{t('lifeExpectancyLabel')}</Text>
+            <TextInput
+              style={[styles.input, {
+                backgroundColor: currentTheme.inputBackground,
+                color: currentTheme.textColor
+              }]}
+              value={lifeExpectancy}
+              onChangeText={(text) => {
+                // Real-time input sanitization and validation
+
+                // First, sanitize input for security
+                const securityCheck = SecurityAuditor.validateRealTimeInput(text, 'lifeExpectancy');
+
+                if (!securityCheck.isAllowed) {
+                  Alert.alert(
+                    t('securityWarning') || 'Security Warning',
+                    securityCheck.reason || 'Invalid input detected',
+                    [{ text: t('acknowledge'), style: 'default' }]
+                  );
+                  return;
+                }
+
+                const inputToProcess = securityCheck.sanitized || text;
+
+                // Enhanced validation using InputValidator
+                const currentAge = birthDate ? InputValidator.calculatePreciseAge(new Date(birthDate)).years : 0;
+                const validation = InputValidator.validateLifeExpectancy(inputToProcess, {
+                  minValue: 1,
+                  maxValue: 150,
+                  currentAge,
+                  allowBelowAge: false
+                });
+
+                if (validation.isValid) {
+                  setLifeExpectancy(validation.sanitizedValue!.toString());
+                } else {
+                  // Only allow the sanitized numeric part without showing error immediately
+                  const sanitizedText = inputToProcess.replace(/[^0-9]/g, '');
+                  if (sanitizedText.length <= 3) {
+                    // Additional real-time validation for user experience
+                    const numValue = parseInt(sanitizedText);
+                    if (sanitizedText === '' || (numValue >= 1 && numValue <= 999)) {
+                      setLifeExpectancy(sanitizedText);
+                    }
+                  }
+                }
+              }}
+              placeholder={t('lifeExpectancyPlaceholder')}
+              placeholderTextColor={currentTheme.placeholderColor}
+              keyboardType="numeric"
+              maxLength={3}
+              returnKeyType="done"
+              accessible={true}
+              accessibilityLabel={t('lifeExpectancyLabel')}
+              accessibilityHint={t('lifeExpectancyHint')}
+            />
+          </View>
+        </>
+      )}
+
+      {!isActive && birthDate && lifeExpectancy && (
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: currentTheme.buttonBackground }]}
+          onPress={startClock}
+        >
+          <Text style={[styles.buttonText, { color: currentTheme.textColor }]}>
+            {t('startButton')}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {isActive && (
+        <TouchableOpacity
+          style={[styles.button, { backgroundColor: currentTheme.buttonStopBackground }]}
+          onPress={stopClock}
+        >
+          <Text style={[styles.buttonText, { color: currentTheme.textColor }]}>
+            {t('stopButton')}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {isActive && (
+        <TouchableOpacity
+          style={[styles.notificationButton, {
+            backgroundColor: showNotification ? currentTheme.primaryColor : currentTheme.languageButtonBackground
+          }]}
+          onPress={toggleNotification}
+        >
+          <Text style={[styles.notificationButtonText, { color: currentTheme.textColor }]}>
+            {showNotification ? t('notificationOn') : t('notificationOff')}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+
+      <View style={styles.settingsContainer}>
+
+        <TouchableOpacity
+          style={[styles.settingsButton, { backgroundColor: currentTheme.languageButtonBackground, marginLeft: 10 }]}
+          onPress={resetDeathClock}
+        >
+          <Text style={[styles.settingsButtonText, { color: currentTheme.textColor }]}>
+            🔄 {t('reset') || 'Reset'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+
+      {isActive && (
+        <View style={styles.clockContainer}>
+          <Text style={[styles.clockTitle, { color: currentTheme.primaryColor }]}>{t('timeLeftTitle')}</Text>
+
+          <View style={styles.progressContainer}>
+            <View style={[styles.progressBar, { backgroundColor: currentTheme.languageButtonBackground }]}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: currentTheme.primaryColor,
+                    width: `${lifeProgress}%`
+                  }
+                ]}
+              />
+            </View>
+            <Text style={[styles.progressText, { color: currentTheme.secondaryColor }]}>
+              {t('lifeProgress')}: {lifeProgress.toFixed(1)}%
+            </Text>
+          </View>
+
+          <View style={styles.timeDisplay}>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.years}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('years')}</Text>
+            </View>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.months}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('months')}</Text>
+            </View>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.days}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('days')}</Text>
+            </View>
+          </View>
+
+          <View style={styles.timeDisplay}>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.hours}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('hours')}</Text>
+            </View>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.minutes}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('minutes')}</Text>
+            </View>
+            <View style={styles.timeUnit}>
+              <Text style={[styles.timeNumber, { color: currentTheme.textColor }]}>{timeLeft.seconds}</Text>
+              <Text style={[styles.timeLabel, { color: currentTheme.secondaryColor }]}>{t('seconds')}</Text>
+            </View>
+          </View>
+        </View>
+      )}
+
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedDate}
+          mode="date"
+          display="default"
+          onChange={onDateChange}
+          maximumDate={new Date()} // Prevent future dates
+          minimumDate={new Date(1900, 0, 1)} // Reasonable minimum date
+          timeZoneOffsetInMinutes={undefined} // Use local timezone
+          textColor={currentTheme.textColor}
+          themeVariant={isDarkTheme ? 'dark' : 'light'}
+        />
+      )}
+
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: currentTheme.modalOverlay }]}>
+          <View style={[styles.modalContent, { backgroundColor: currentTheme.modalBackground }]}>
+            <Text style={[styles.modalTitle, { color: currentTheme.textColor }]}>{t('selectLanguage')}</Text>
+            <FlatList
+              data={languages}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.languageItem,
+                    { backgroundColor: currentTheme.languageButtonBackground },
+                    i18n.language === item.code && {
+                      backgroundColor: currentTheme.selectedLanguageBackground
+                    }
+                  ]}
+                  onPress={() => {
+                    HapticFeedback.trigger('selection');
+                    changeLanguage(item.code);
+                  }}
+                >
+                  <Text style={[
+                    styles.languageText,
+                    { color: currentTheme.textColor },
+                    i18n.language === item.code && styles.selectedLanguageText
+                  ]}>
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowLanguageModal(false)}
+            >
+              <Text style={[styles.closeButtonText, { color: currentTheme.textColor }]}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+      </View>
+    </ErrorBoundary>
+  );
+});
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  themeButton: {
+    padding: 10,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  themeButtonText: {
+    fontSize: 20,
+  },
+  languageButton: {
+    padding: 10,
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  languageButtonText: {
+    fontSize: 20,
+  },
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
+  },
+  input: {
+    padding: 15,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(128, 128, 128, 0.3)',
+  },
+  button: {
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  buttonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  clockContainer: {
+    marginTop: 40,
+    alignItems: 'center',
+  },
+  clockTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+  },
+  timeDisplay: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+  },
+  timeUnit: {
+    alignItems: 'center',
+  },
+  timeNumber: {
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  timeLabel: {
+    fontSize: 14,
+    marginTop: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    borderRadius: 15,
+    padding: 20,
+    width: '80%',
+    maxHeight: '60%',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  languageItem: {
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 5,
+  },
+  languageText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  selectedLanguageText: {
+    fontWeight: 'bold',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 15,
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  notificationButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  notificationButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+  },
+  datePickerInput: {
+    justifyContent: 'center',
+  },
+  progressContainer: {
+    marginBottom: 20,
+    alignItems: 'center',
+  },
+  progressBar: {
+    height: 8,
+    borderRadius: 4,
+    width: '100%',
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  settingsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginHorizontal: 20,
+    flexWrap: 'wrap',
+  },
+  settingsButton: {
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 120,
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  settingsButtonText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+});
+
+
+export default App;

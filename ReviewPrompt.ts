@@ -86,7 +86,7 @@ class ReviewPrompt {
         const url = `itms-apps://itunes.apple.com/app/id${appId}?action=write-review`;
         await Linking.openURL(url);
       } else if (Platform.OS === 'android') {
-        const packageName = 'com.deathclock'; // Replace with actual package name
+        const packageName = 'com.kimdaesoo.deathclock';
         const url = `market://details?id=${packageName}`;
         await Linking.openURL(url);
       }
@@ -95,7 +95,7 @@ class ReviewPrompt {
       // Fallback to web browser
       const fallbackUrl = Platform.OS === 'ios'
         ? 'https://apps.apple.com/app/death-clock/id${appId}'
-        : 'https://play.google.com/store/apps/details?id=com.deathclock';
+        : 'https://play.google.com/store/apps/details?id=com.kimdaesoo.deathclock';
 
       try {
         await Linking.openURL(fallbackUrl);

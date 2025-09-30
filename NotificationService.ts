@@ -1,5 +1,7 @@
 import PushNotification, {Importance} from 'react-native-push-notification';
-import {Platform} from 'react-native';
+import {Platform, NativeModules} from 'react-native';
+
+const {SharedPrefs} = NativeModules;
 
 export interface TimeLeft {
   years: number;
@@ -13,6 +15,7 @@ export interface TimeLeft {
 class NotificationService {
   private notificationId = 'death_clock_notification';
   private isConfigured = false;
+  private useNativeService = Platform.OS === 'android';
 
   constructor() {
     this.initialize();
@@ -21,51 +24,66 @@ class NotificationService {
   private initialize = () => {
     if (!this.isConfigured) {
       this.configure();
-      this.createChannel();
+      if (!this.useNativeService) {
+        this.createChannel();
+      }
       this.isConfigured = true;
     }
   };
 
   configure = () => {
-    PushNotification.configure({
-      onRegister: function (token) {
-        console.log('TOKEN:', token);
-      },
-      onNotification: function (notification) {
-        console.log('NOTIFICATION:', notification);
-      },
-      onAction: function (notification) {
-        console.log('ACTION:', notification.action);
-      },
-      onRegistrationError: function(err) {
-        console.error(err.message, err);
-      },
-      permissions: {
-        alert: true,
-        badge: true,
-        sound: true,
-      },
-      popInitialNotification: true,
-      requestPermissions: Platform.OS === 'ios',
-    });
+    // Only configure React Native push notifications for iOS or as fallback
+    if (!this.useNativeService) {
+      PushNotification.configure({
+        onRegister: function (token) {
+          console.log('TOKEN:', token);
+        },
+        onNotification: function (notification) {
+          console.log('NOTIFICATION:', notification);
+        },
+        onAction: function (notification) {
+          console.log('ACTION:', notification.action);
+        },
+        onRegistrationError: function(err) {
+          console.error(err.message, err);
+        },
+        permissions: {
+          alert: true,
+          badge: true,
+          sound: true,
+        },
+        popInitialNotification: true,
+        requestPermissions: Platform.OS === 'ios',
+      });
+    }
   };
 
   createChannel = () => {
-    PushNotification.createChannel(
-      {
-        channelId: this.notificationId,
-        channelName: 'Death Clock',
-        channelDescription: 'Persistent notification showing remaining lifetime',
-        playSound: false,
-        soundName: 'default',
-        importance: Importance.LOW,
-        vibrate: false,
-      },
-      (created) => console.log(`createChannel returned '${created}'`)
-    );
+    if (!this.useNativeService) {
+      PushNotification.createChannel(
+        {
+          channelId: this.notificationId,
+          channelName: 'CHALNA',
+          channelDescription: 'Persistent notification showing remaining lifetime',
+          playSound: false,
+          soundName: 'default',
+          importance: Importance.LOW,
+          vibrate: false,
+        },
+        (created) => console.log(`createChannel returned '${created}'`)
+      );
+    }
   };
 
   showPersistentNotification = (timeLeft: TimeLeft, t: (key: string) => string) => {
+    if (this.useNativeService) {
+      // For Android, the native service handles notifications automatically
+      // We just need to ensure the service is running
+      console.log('Android native notification service is handling persistent notifications');
+      return;
+    }
+
+    // Fallback to React Native notifications for iOS
     const title = `💀 ${t('title')}`;
     const message = this.formatTimeLeft(timeLeft, t);
 
@@ -87,6 +105,10 @@ class NotificationService {
   };
 
   updateNotification = (timeLeft: TimeLeft, t: (key: string) => string) => {
+    if (this.useNativeService) {
+      // Native service updates automatically, nothing needed here
+      return;
+    }
     this.showPersistentNotification(timeLeft, t);
   };
 
@@ -101,24 +123,100 @@ class NotificationService {
   };
 
   cancelNotification = () => {
-    PushNotification.cancelLocalNotifications({id: 1});
+    if (this.useNativeService && SharedPrefs) {
+      SharedPrefs.stopNotificationService();
+    } else {
+      PushNotification.cancelLocalNotifications({id: 1});
+    }
   };
 
   cancelAllNotifications = () => {
-    PushNotification.cancelAllLocalNotifications();
+    if (this.useNativeService && SharedPrefs) {
+      SharedPrefs.stopNotificationService();
+    } else {
+      PushNotification.cancelAllLocalNotifications();
+    }
   };
 
-  requestPermissions = async () => {
+  requestPermissions = async (): Promise<boolean> => {
     try {
-      await PushNotification.requestPermissions();
+      if (this.useNativeService && SharedPrefs) {
+        return new Promise((resolve) => {
+          SharedPrefs.checkNotificationPermission((isEnabled: boolean) => {
+            if (!isEnabled) {
+              SharedPrefs.requestNotificationPermission();
+              // Since we can't know if user granted permission, return false
+              // and let the caller check again later
+              resolve(false);
+            } else {
+              resolve(true);
+            }
+          });
+        });
+      } else {
+        await PushNotification.requestPermissions();
+        return true;
+      }
     } catch (error) {
       console.log('Error requesting permissions:', error);
+      return false;
+    }
+  };
+
+  checkPermissions = async (): Promise<boolean> => {
+    try {
+      if (this.useNativeService && SharedPrefs) {
+        return new Promise((resolve) => {
+          SharedPrefs.checkNotificationPermission((isEnabled: boolean) => {
+            resolve(isEnabled);
+          });
+        });
+      } else {
+        // For iOS, assume permissions are granted if configured
+        return true;
+      }
+    } catch (error) {
+      console.log('Error checking permissions:', error);
+      return false;
+    }
+  };
+
+  startNotificationService = (birthDate: string, lifeExpectancy: number) => {
+    if (this.useNativeService && SharedPrefs) {
+      try {
+        const birth = new Date(birthDate);
+        SharedPrefs.saveUserData(
+          birth.getFullYear(),
+          birth.getMonth() + 1, // Android expects 1-based months
+          birth.getDate(),
+          lifeExpectancy
+        );
+        console.log('Native notification service started with user data');
+      } catch (error) {
+        console.error('Error starting native notification service:', error);
+      }
+    }
+  };
+
+  stopNotificationService = () => {
+    if (this.useNativeService && SharedPrefs) {
+      SharedPrefs.stopNotificationService();
     }
   };
 
   destroy = () => {
+    // Stop notifications
     this.cancelAllNotifications();
+
+    if (!this.useNativeService) {
+      // Clear any pending notifications
+      PushNotification.abandonPermissions();
+    }
+
+    // Reset configuration state
     this.isConfigured = false;
+
+    console.log('NotificationService destroyed and cleaned up');
   };
 }
 
