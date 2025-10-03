@@ -1,6 +1,7 @@
 // 간소화된 ErrorBoundary - CHALNA 앱용
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import i18n from './i18n';
 
 interface ErrorInfo {
   componentStack?: string;
@@ -64,18 +65,18 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       return (
         <View style={styles.container}>
           <View style={styles.errorContainer}>
-            <Text style={styles.title}>😵 앱에서 오류가 발생했습니다</Text>
+            <Text style={styles.title}>😵 {i18n.t('errorBoundaryTitle')}</Text>
             <Text style={styles.message}>
-              예상치 못한 오류가 발생했습니다. 앱을 다시 시작해주세요.
+              {i18n.t('errorBoundaryMessage')}
             </Text>
 
             <TouchableOpacity style={styles.retryButton} onPress={this.handleRetry}>
-              <Text style={styles.retryButtonText}>다시 시도</Text>
+              <Text style={styles.retryButtonText}>{i18n.t('errorBoundaryRetry')}</Text>
             </TouchableOpacity>
 
             {__DEV__ && this.state.error && (
               <View style={styles.debugContainer}>
-                <Text style={styles.debugTitle}>개발자 정보:</Text>
+                <Text style={styles.debugTitle}>{i18n.t('errorBoundaryDebugInfo')}</Text>
                 <Text style={styles.debugText}>{this.state.error.message}</Text>
                 {this.state.error.stack && (
                   <Text style={styles.debugText} numberOfLines={10}>

@@ -106,10 +106,19 @@ android {
             keyPassword 'android'
         }
         release {
-            storeFile file('release.keystore')
-            storePassword 'eotn7515!'
-            keyAlias 'deathclock-key'
-            keyPassword 'eotn7515!'
+            // Read signing config from gradle.properties for security
+            if (project.hasProperty('CHALNA_RELEASE_STORE_FILE')) {
+                storeFile file(CHALNA_RELEASE_STORE_FILE)
+                storePassword CHALNA_RELEASE_STORE_PASSWORD
+                keyAlias CHALNA_RELEASE_KEY_ALIAS
+                keyPassword CHALNA_RELEASE_KEY_PASSWORD
+            } else {
+                // Fallback for local development (not recommended for production)
+                storeFile file('release.keystore')
+                storePassword 'eotn7515!'
+                keyAlias 'deathclock-key'
+                keyPassword 'eotn7515!'
+            }
         }
     }
     buildTypes {
