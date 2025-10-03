@@ -1,5 +1,6 @@
 // 간소화된 CrashReporter - 로컬 앱용
 import { Alert } from 'react-native';
+import i18n from './i18n';
 
 interface SimpleCrashReport {
   timestamp: string;
@@ -30,9 +31,9 @@ class CrashReporter {
 
       // 사용자에게 간단한 알림
       Alert.alert(
-        '오류가 발생했습니다',
-        '앱에서 오류가 발생했지만 데이터는 안전합니다. 다시 시도해주세요.',
-        [{ text: '확인' }]
+        i18n.t('crashReporterTitle'),
+        i18n.t('crashReporterMessage'),
+        [{ text: i18n.t('crashReporterConfirm') }]
       );
     } catch (reportingError) {
       console.error('Failed to report crash:', reportingError);

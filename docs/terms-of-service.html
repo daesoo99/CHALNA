@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CHALNA Terms of Service - Please read carefully before using our app">
+    <title>Terms of Service - CHALNA</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            background: #fefefe;
+            color: #1a1a1a;
+            line-height: 1.7;
+            padding: 20px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            body {
+                background: #0f0f0f;
+                color: #f5f5dc;
+            }
+
+            .container {
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(232, 197, 71, 0.2);
+            }
+
+            .tab {
+                background: rgba(255, 255, 255, 0.05);
+                color: #f5f5dc;
+            }
+
+            .tab.active {
+                background: #e8c547;
+                color: #0f0f0f;
+            }
+
+            .content-section {
+                border-left-color: #e8c547;
+            }
+
+            .warning-box {
+                background: rgba(232, 71, 71, 0.1);
+                border-left-color: #e84747;
+            }
+
+            .info-box {
+                background: rgba(71, 157, 232, 0.1);
+                border-left-color: #479de8;
+            }
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #e8c547 0%, #d4a843 100%);
+            color: #0f0f0f;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .header .tagline {
+            font-size: 16px;
+            font-weight: 300;
+            font-style: italic;
+            opacity: 0.9;
+        }
+
+        .header .effective-date {
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #e8c547;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 16px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .tab:hover {
+            background: rgba(232, 197, 71, 0.1);
+        }
+
+        .tab.active {
+            background: #e8c547;
+            color: #0f0f0f;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .content-section {
+            display: none;
+        }
+
+        .content-section.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h2 {
+            color: #e8c547;
+            font-size: 24px;
+            margin: 30px 0 15px 0;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e8c547;
+        }
+
+        h3 {
+            color: #d4a843;
+            font-size: 20px;
+            margin: 25px 0 12px 0;
+        }
+
+        h4 {
+            font-size: 18px;
+            margin: 20px 0 10px 0;
+            color: #555;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            h4 {
+                color: #d4a843;
+            }
+        }
+
+        p {
+            margin: 12px 0;
+            font-size: 16px;
+        }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            margin: 8px 0;
+            font-size: 16px;
+        }
+
+        strong {
+            color: #e8c547;
+            font-weight: 600;
+        }
+
+        .article {
+            margin: 25px 0;
+        }
+
+        .article-title {
+            color: #e8c547;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .warning-box {
+            background: rgba(232, 71, 71, 0.05);
+            padding: 20px;
+            border-left: 4px solid #e84747;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .warning-box strong {
+            color: #e84747;
+        }
+
+        .info-box {
+            background: rgba(232, 197, 71, 0.1);
+            padding: 20px;
+            border-left: 4px solid #e8c547;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 30px;
+            background: #f5f5f5;
+            color: #666;
+            font-size: 14px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .footer {
+                background: rgba(255, 255, 255, 0.05);
+                color: rgba(245, 245, 220, 0.6);
+            }
+        }
+
+        .footer a {
+            color: #e8c547;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin: 20px 30px;
+            color: #e8c547;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .back-link:hover {
+            transform: translateX(-5px);
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 24px;
+            }
+
+            .content {
+                padding: 30px 20px;
+            }
+
+            h2 {
+                font-size: 20px;
+            }
+
+            h3, .article-title {
+                font-size: 18px;
+            }
+
+            p, li {
+                font-size: 15px;
+            }
+
+            .tab {
+                font-size: 14px;
+                padding: 12px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Back to Legal Documents</a>
+
+    <div class="container">
+        <div class="header">
+            <h1>Terms of Service</h1>
+            <p class="tagline">이용약관</p>
+            <p class="effective-date">Effective Date: January 1, 2025 | 시행일: 2025년 1월 1일</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('korean')">한국어</button>
+            <button class="tab" onclick="switchTab('english')">English</button>
+        </div>
+
+        <div class="content">
+            <!-- Korean Version -->
+            <div id="korean" class="content-section active">
+                <div class="warning-box">
+                    <strong>중요 안내:</strong> 본 앱은 교육 및 성찰 목적의 엔터테인먼트 앱입니다. 표시되는 시간은 가상의 계산이며, 의학적 조언이 아닙니다. 심리적 불안을 느끼실 경우 전문가의 도움을 받으시기 바랍니다.
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제1조 (목적)</h3>
+                    <p>본 약관은 CHALNA 앱(이하 "서비스")의 이용과 관련하여 회사와 이용자 간의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제2조 (서비스의 성격)</h3>
+                    <ol>
+                        <li>본 앱은 <strong>교육 및 성찰 목적</strong>의 엔터테인먼트 앱입니다.</li>
+                        <li>표시되는 모든 시간은 <strong>가상의 계산</strong>이며, 실제 수명과 무관합니다.</li>
+                        <li>의학적 조언이나 예측을 제공하지 않습니다.</li>
+                    </ol>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제3조 (면책사항)</h3>
+                    <ol>
+                        <li>회사는 앱 사용으로 인한 <strong>심리적 불안, 스트레스</strong> 등에 대해 책임지지 않습니다.</li>
+                        <li>표시된 시간은 <strong>통계적 추정</strong>이며, 실제와 다를 수 있습니다.</li>
+                        <li><strong>의료적 결정</strong>의 근거로 사용하지 마십시오.</li>
+                    </ol>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제4조 (이용 제한)</h3>
+                    <p>다음의 경우 서비스 이용을 권하지 않습니다:</p>
+                    <ul>
+                        <li>심각한 우울증 또는 정신 건강 문제가 있는 경우</li>
+                        <li>자해 위험이 있는 경우</li>
+                        <li>미성년자 (보호자 동의 필요)</li>
+                    </ul>
+                    <div class="warning-box">
+                        <strong>주의:</strong> 위의 조건에 해당하시는 경우, 앱 사용 전에 정신 건강 전문가와 상담하시기 바랍니다.
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제5조 (데이터 보호)</h3>
+                    <p>모든 개인정보는 기기 내에서만 저장되며, 외부로 전송되지 않습니다. 자세한 내용은 <a href="privacy-policy.html" style="color: #e8c547;">개인정보처리방침</a>을 참조하시기 바랍니다.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제6조 (지적재산권)</h3>
+                    <p>본 앱의 모든 콘텐츠, 디자인, 소스코드는 CHALNA의 지적재산으로 보호받습니다. 무단 복제, 배포, 수정을 금지합니다.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제7조 (서비스 변경 및 중단)</h3>
+                    <p>회사는 운영상, 기술상의 필요에 따라 제공하고 있는 서비스를 변경하거나 중단할 수 있습니다. 이 경우 사전에 공지하도록 노력하겠습니다.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제8조 (약관의 변경)</h3>
+                    <p>본 약관은 필요에 따라 변경될 수 있으며, 변경된 약관은 앱 내 공지를 통해 알려드립니다. 변경 후에도 계속 서비스를 이용하시는 경우 변경된 약관에 동의한 것으로 간주됩니다.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">제9조 (준거법 및 관할법원)</h3>
+                    <p>본 약관의 해석 및 이용자와 회사 간의 분쟁에 대해서는 대한민국 법을 적용하며, 관할법원은 민사소송법에 따릅니다.</p>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>연락처:</strong></p>
+                    <p>이메일: <a href="mailto:developer@chalna.app" style="color: #e8c547;">developer@chalna.app</a></p>
+                    <p>문의사항이 있으시면 언제든지 연락해주시기 바랍니다.</p>
+                </div>
+
+                <div class="warning-box">
+                    <p><strong>정신건강 도움 연락처 (대한민국):</strong></p>
+                    <ul style="margin-top: 10px;">
+                        <li>정신건강 위기상담전화: ☎ 1577-0199</li>
+                        <li>자살예방 상담전화: ☎ 1393</li>
+                        <li>청소년 전화: ☎ 1388</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- English Version -->
+            <div id="english" class="content-section">
+                <div class="warning-box">
+                    <strong>Important Notice:</strong> This app is for educational and reflective entertainment purposes only. The displayed times are hypothetical calculations and not medical advice. If you experience distress, please seek professional help.
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 1 (Purpose)</h3>
+                    <p>These terms define the rights, obligations, and responsibilities between the company and users regarding the use of the CHALNA app.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 2 (Nature of Service)</h3>
+                    <ol>
+                        <li>This app is an <strong>educational and reflective entertainment</strong> application.</li>
+                        <li>All displayed times are <strong>hypothetical calculations</strong> and unrelated to actual lifespan.</li>
+                        <li>We do not provide medical advice or predictions.</li>
+                    </ol>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 3 (Disclaimer)</h3>
+                    <ol>
+                        <li>The company is not responsible for <strong>psychological anxiety or stress</strong> caused by app usage.</li>
+                        <li>Displayed times are <strong>statistical estimates</strong> and may differ from reality.</li>
+                        <li>Do not use as a basis for <strong>medical decisions</strong>.</li>
+                    </ol>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 4 (Usage Restrictions)</h3>
+                    <p>We do not recommend service usage for:</p>
+                    <ul>
+                        <li>Those with severe depression or mental health issues</li>
+                        <li>Those at risk of self-harm</li>
+                        <li>Minors (parental consent required)</li>
+                    </ul>
+                    <div class="warning-box">
+                        <strong>Warning:</strong> If you fall into any of the above categories, please consult with a mental health professional before using the app.
+                    </div>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 5 (Data Protection)</h3>
+                    <p>All personal information is stored only on your device and is not transmitted externally. For more details, please refer to our <a href="privacy-policy.html" style="color: #e8c547;">Privacy Policy</a>.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 6 (Intellectual Property)</h3>
+                    <p>All content, design, and source code of this app are protected as CHALNA's intellectual property. Unauthorized reproduction, distribution, or modification is prohibited.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 7 (Service Changes and Suspension)</h3>
+                    <p>The company may modify or suspend the service as needed for operational or technical reasons. We will make reasonable efforts to notify users in advance.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 8 (Terms Modification)</h3>
+                    <p>These terms may be modified as necessary. Modified terms will be announced through in-app notifications. Continued use of the service after modifications constitutes acceptance of the modified terms.</p>
+                </div>
+
+                <div class="article">
+                    <h3 class="article-title">Article 9 (Governing Law and Jurisdiction)</h3>
+                    <p>These terms shall be governed by the laws of the Republic of Korea. Jurisdiction for disputes shall be determined in accordance with the Civil Procedure Act.</p>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>Contact Information:</strong></p>
+                    <p>Email: <a href="mailto:developer@chalna.app" style="color: #e8c547;">developer@chalna.app</a></p>
+                    <p>Please feel free to contact us with any questions.</p>
+                </div>
+
+                <div class="warning-box">
+                    <p><strong>Mental Health Support (International):</strong></p>
+                    <ul style="margin-top: 10px;">
+                        <li>International Association for Suicide Prevention: <a href="https://www.iasp.info/resources/Crisis_Centres/" style="color: #e8c547;" target="_blank">Find Help</a></li>
+                        <li>Crisis Text Line (US): Text HOME to 741741</li>
+                        <li>National Suicide Prevention Lifeline (US): 988</li>
+                        <li>Samaritans (UK): 116 123</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2024-2025 CHALNA. All rights reserved.</p>
+            <p style="margin-top: 10px;">
+                <a href="index.html">Back to Legal Documents</a> |
+                <a href="mailto:developer@chalna.app">Contact Developer</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(language) {
+            // Hide all sections
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected section
+            document.getElementById(language).classList.add('active');
+
+            // Mark clicked tab as active
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>
