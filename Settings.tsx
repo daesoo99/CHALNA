@@ -17,8 +17,8 @@ import { storageManager } from './StorageManager';
 import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { DataBackupService } from './DataBackupService';
 
-// Legal document URLs - Update these after GitHub Pages deployment
-const GITHUB_PAGES_BASE = 'https://[YOUR_USERNAME].github.io/[REPO_NAME]';
+// Legal document URLs - GitHub Pages
+const GITHUB_PAGES_BASE = 'https://daesoo99.github.io/CHALNA';
 const PRIVACY_POLICY_URL = `${GITHUB_PAGES_BASE}/privacy-policy.html`;
 const TERMS_URL = `${GITHUB_PAGES_BASE}/terms-of-service.html`;
 
