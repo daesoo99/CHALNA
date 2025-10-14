@@ -41,7 +41,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
     this.setState({
       errorInfo: {
-        componentStack: errorInfo.componentStack,
+        componentStack: errorInfo.componentStack || undefined,
       },
     });
   }

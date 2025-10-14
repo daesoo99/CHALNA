@@ -14,9 +14,9 @@ import {
   AppState,
   ScrollView,
   KeyboardAvoidingView,
+  Animated,
+  TouchableWithoutFeedback,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
 import ErrorBoundary from './ErrorBoundary';
@@ -26,6 +26,9 @@ import SecurityAuditor from './SecurityAuditor';
 import Onboarding from './Onboarding';
 import NotificationService from './NotificationService';
 import Settings from './Settings';
+import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import HourglassIcon from './components/HourglassIcon';
 import './i18n';
 
 // TimeCard 컴포넌트 분리: 불필요한 리렌더링 방지
@@ -61,6 +64,85 @@ const TimeCard = memo<TimeCardProps>(({ value, label, color, backgroundColor, bo
 
 TimeCard.displayName = 'TimeCard';
 
+// AnimatedButton Component: Button with press animations
+interface AnimatedButtonProps {
+  onPress: () => void;
+  style?: any;
+  children: React.ReactNode;
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button' | 'text';
+  disabled?: boolean;
+}
+
+const AnimatedButton = memo<AnimatedButtonProps>(({
+  onPress,
+  style,
+  children,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+  disabled = false,
+}) => {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 0.95,
+        useNativeDriver: true,
+        speed: 50,
+        bounciness: 4,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 0.8,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [scaleAnim, opacityAnim]);
+
+  const handlePressOut = useCallback(() => {
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        speed: 50,
+        bounciness: 4,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [scaleAnim, opacityAnim]);
+
+  return (
+    <TouchableWithoutFeedback
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      onPress={onPress}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole}
+      disabled={disabled}
+    >
+      <Animated.View
+        style={[
+          style,
+          {
+            transform: [{ scale: scaleAnim }],
+            opacity: opacityAnim,
+          },
+        ]}
+      >
+        {children}
+      </Animated.View>
+    </TouchableWithoutFeedback>
+  );
+});
+
+AnimatedButton.displayName = 'AnimatedButton';
+
 const App = memo(() => {
   console.log('🚀 App component rendering...');
   const { t, i18n } = useTranslation();
@@ -69,6 +151,7 @@ const App = memo(() => {
   const isMountedRef = useRef(true);
   const timeoutIdsRef = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [nickname, setNickname] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [lifeExpectancy, setLifeExpectancy] = useState('80');
   const [timeLeft, setTimeLeft] = useState({
@@ -79,13 +162,11 @@ const App = memo(() => {
     minutes: 0,
     seconds: 0,
   });
-  const [isActive, setIsActive] = useState(false);
+  const [isActive, setIsActive] = useState(true); // 자동 시작
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [currentTheme, setCurrentTheme] = useState<Theme>(darkTheme);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(true);
   const [currentTimezone, setCurrentTimezone] = useState<string>('');
   const [timezoneChangedNotification, setTimezoneChangedNotification] = useState(false);
@@ -94,17 +175,15 @@ const App = memo(() => {
   const [isBackgroundPaused, setIsBackgroundPaused] = useState(false);
   const [syncNotification, setSyncNotification] = useState<string | null>(null);
 
-  // 온보딩 및 검증 상태
+  // Theme animation state
+  const themeOpacity = useRef(new Animated.Value(1)).current;
+
+  // 온보딩 상태
   const [onboardingComplete, setOnboardingComplete] = useState(false);
-  const [lifeExpectancyError, setLifeExpectancyError] = useState<string | null>(null);
-  const [isLifeExpectancyValid, setIsLifeExpectancyValid] = useState(true);
 
   // 알림 상태
   const [notificationPermissionGranted, setNotificationPermissionGranted] = useState(false);
   const [hasAskedForNotificationPermission, setHasAskedForNotificationPermission] = useState(false);
-
-  // 디바운스 타이머 참조
-  const validationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Memory management utilities
   const safeSetState = useCallback((setter: any, value: any) => {
@@ -135,88 +214,51 @@ const App = memo(() => {
     { code: 'zh', name: '中文' },
   ], [t]);
 
-  // 햅틱 피드백 유틸리티
-  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'success' | 'error' = 'medium') => {
-    const hapticOptions = {
-      enableVibrateFallback: true,
-      ignoreAndroidSystemSettings: false,
-    };
-
-    switch (type) {
-      case 'light':
-        ReactNativeHapticFeedback.trigger('impactLight', hapticOptions);
-        break;
-      case 'medium':
-        ReactNativeHapticFeedback.trigger('impactMedium', hapticOptions);
-        break;
-      case 'success':
-        ReactNativeHapticFeedback.trigger('notificationSuccess', hapticOptions);
-        break;
-      case 'error':
-        ReactNativeHapticFeedback.trigger('notificationError', hapticOptions);
-        break;
-    }
-  }, []);
-
-  // 스마트 기본값 계산 (생년월일 기반)
-  const calculateSuggestedLifeExpectancy = useCallback((birthDateStr: string): number => {
+  /**
+   * Triggers haptic feedback based on the specified type.
+   * Provides tactile feedback to enhance user interactions.
+   *
+   * @param type - The type of haptic feedback: 'light', 'medium', 'heavy', 'success', or 'error'
+   * @returns void
+   *
+   * Gracefully handles devices that don't support haptic feedback.
+   */
+  const triggerHaptic = useCallback((type: 'light' | 'medium' | 'heavy' | 'success' | 'error' = 'medium') => {
     try {
-      const birth = new Date(birthDateStr);
-      const now = new Date();
-      const currentAge = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 365.25));
+      const hapticOptions = {
+        enableVibrateFallback: true,
+        ignoreAndroidSystemSettings: false,
+      };
 
-      // 한국 평균 수명 (2024년 기준)
-      const averageLifeExpectancy = 83;
-
-      // 현재 나이가 평균 수명보다 높으면 현재 나이 + 10년
-      if (currentAge >= averageLifeExpectancy) {
-        return Math.min(150, currentAge + 10);
+      // Map haptic types to ReactNativeHapticFeedback methods
+      switch (type) {
+        case 'light':
+          ReactNativeHapticFeedback.trigger('impactLight', hapticOptions);
+          break;
+        case 'medium':
+          ReactNativeHapticFeedback.trigger('impactMedium', hapticOptions);
+          break;
+        case 'heavy':
+          ReactNativeHapticFeedback.trigger('impactHeavy', hapticOptions);
+          break;
+        case 'success':
+          ReactNativeHapticFeedback.trigger('notificationSuccess', hapticOptions);
+          break;
+        case 'error':
+          ReactNativeHapticFeedback.trigger('notificationError', hapticOptions);
+          break;
+        default:
+          ReactNativeHapticFeedback.trigger('impactMedium', hapticOptions);
       }
-
-      return averageLifeExpectancy;
     } catch (error) {
-      console.error('❌ Error calculating suggested life expectancy:', error);
-      return 80;
+      // Silently fail if haptic feedback is not supported on this device
+      console.debug('Haptic feedback not available:', error);
     }
   }, []);
 
-  // 디바운스된 수명 검증 (500ms 지연)
-  const handleLifeExpectancyChange = useCallback((text: string) => {
-    // 숫자가 아닌 문자 필터링
-    const numericText = text.replace(/[^0-9]/g, '');
-    safeSetState(setLifeExpectancy, numericText);
-
-    // 이전 타이머 취소
-    if (validationTimerRef.current) {
-      clearTimeout(validationTimerRef.current);
-    }
-
-    // 빈 값은 즉시 처리 (디바운스 제외)
-    if (numericText === '') {
-      safeSetState(setLifeExpectancyError, null);
-      safeSetState(setIsLifeExpectancyValid, false);
-      return;
-    }
-
-    // 500ms 후에 검증 실행
-    validationTimerRef.current = setTimeout(() => {
-      if (!isMountedRef.current) return;
-
-      const security = SecurityAuditor.getInstance();
-      const validation = security.validateLifeExpectancy(parseInt(numericText));
-
-      safeSetState(setIsLifeExpectancyValid, validation.isValid);
-      safeSetState(setLifeExpectancyError, validation.isValid ? null : validation.message);
-
-      // 유효하지 않을 때만 햅틱 (최종 검증 후)
-      if (!validation.isValid) {
-        triggerHaptic('light');
-      }
-    }, 500);
-  }, [safeSetState, triggerHaptic]);
 
   // 타임존 변경 감지 및 처리 함수
-  const detectTimezoneChange = () => {
+  const detectTimezoneChange = useCallback(() => {
     const currentTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const currentOffset = new Date().getTimezoneOffset();
     const tzString = `${currentTz}_${currentOffset}`;
@@ -242,7 +284,7 @@ const App = memo(() => {
     }
 
     safeSetState(setCurrentTimezone, tzString);
-  };
+  }, [currentTimezone, isActive, birthDate, calculateTimeLeft, safeSetState, addTimeout]);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -265,7 +307,7 @@ const App = memo(() => {
         interval = null;
       }
     };
-  }, [isActive, birthDate, lifeExpectancy, isBackgroundPaused, appState]);
+  }, [isActive, birthDate, lifeExpectancy, isBackgroundPaused, appState, calculateTimeLeft, safeSetState]);
 
   // 알림 업데이트 (timeLeft가 변경될 때마다)
   useEffect(() => {
@@ -300,7 +342,7 @@ const App = memo(() => {
       console.log('🧹 Cleaning up AppState listener');
       subscription?.remove();
     };
-  }, [appState, isActive, birthDate, lastCalculationTime]);
+  }, [appState, isActive, birthDate, lastCalculationTime, handleBackgroundEntry, handleForegroundReturn, safeSetState]);
 
   // Master cleanup effect for memory leak prevention
   useEffect(() => {
@@ -313,12 +355,6 @@ const App = memo(() => {
       // Clear all pending timeouts
       clearAllTimeouts();
 
-      // Clear validation timer
-      if (validationTimerRef.current) {
-        clearTimeout(validationTimerRef.current);
-        validationTimerRef.current = null;
-      }
-
       // Abort any ongoing async operations
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -330,7 +366,7 @@ const App = memo(() => {
   }, [clearAllTimeouts]);
 
   // 포그라운드 복귀 시 처리 함수
-  const handleForegroundReturn = (previousState: string) => {
+  const handleForegroundReturn = useCallback((previousState: string) => {
     console.log('📱 App returned to foreground from:', previousState);
 
     // 타임존 변경 체크 (기존 기능 유지)
@@ -365,10 +401,10 @@ const App = memo(() => {
         addTimeout(timeoutId);
       }
     }
-  };
+  }, [isActive, birthDate, isBackgroundPaused, lastCalculationTime, calculateTimeLeft, safeSetState, t, addTimeout, detectTimezoneChange]);
 
   // 백그라운드 진입 시 처리 함수
-  const handleBackgroundEntry = () => {
+  const handleBackgroundEntry = useCallback(() => {
     console.log('🌙 App entered background/inactive state');
 
     if (isActive && birthDate) {
@@ -382,7 +418,7 @@ const App = memo(() => {
       // 백그라운드에서의 리소스 절약을 위해 추가 최적화 가능
       // 예: 불필요한 계산 중단, 메모리 정리 등
     }
-  };
+  }, [isActive, birthDate, safeSetState]);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -414,6 +450,7 @@ const App = memo(() => {
     };
 
     initializeApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const calculateTimeLeft = useCallback(() => {
@@ -423,7 +460,7 @@ const App = memo(() => {
       // 기본 검증
       const security = SecurityAuditor.getInstance();
       const birthValidation = security.validateBirthDate(birthDate);
-      const lifeValidation = security.validateLifeExpectancy(parseInt(lifeExpectancy));
+      const lifeValidation = security.validateLifeExpectancy(parseInt(lifeExpectancy, 10));
 
       if (!birthValidation.isValid) {
         Alert.alert(t('errorTitle'), birthValidation.message);
@@ -439,13 +476,13 @@ const App = memo(() => {
       // UTC 기반 안정적인 시간 계산
       const birth = new Date(birthDate + 'T00:00:00Z'); // UTC로 명시적 설정
       const expectedDeath = new Date(birth);
-      expectedDeath.setUTCFullYear(birth.getUTCFullYear() + parseInt(lifeExpectancy));
+      expectedDeath.setUTCFullYear(birth.getUTCFullYear() + parseInt(lifeExpectancy, 10));
 
 
       // 로컬 시간 기준으로 다시 계산 (사용자 관점에서의 정확한 시간)
       const localBirth = new Date(birthDate + 'T00:00:00');
       const localExpectedDeath = new Date(localBirth);
-      localExpectedDeath.setFullYear(localBirth.getFullYear() + parseInt(lifeExpectancy));
+      localExpectedDeath.setFullYear(localBirth.getFullYear() + parseInt(lifeExpectancy, 10));
 
       const localNow = new Date();
       const difference = localExpectedDeath.getTime() - localNow.getTime();
@@ -459,8 +496,8 @@ const App = memo(() => {
       }
 
       // 더 정확한 시간 계산 (윤년 고려)
-      const totalSeconds = Math.floor(difference / 1000);
-      const totalMinutes = Math.floor(totalSeconds / 60);
+      // const totalSeconds = Math.floor(difference / 1000); // Unused
+      // const totalMinutes = Math.floor(totalSeconds / 60); // Unused
 
       // 년/월 계산을 위한 더 정확한 로직
       const currentDate = new Date(localNow);
@@ -520,7 +557,7 @@ const App = memo(() => {
       console.error('Time calculation error:', error);
       CrashReporter.getInstance().reportCrash(error as Error);
     }
-  }, [birthDate, lifeExpectancy]);
+  }, [birthDate, lifeExpectancy, t, safeSetState]);
 
   const loadSavedData = async () => {
     // Create new AbortController for this operation
@@ -530,6 +567,7 @@ const App = memo(() => {
     try {
       if (currentController.signal.aborted) return;
       // Load saved data
+      const savedNickname = await storageManager.get('nickname');
       const savedBirthDate = await storageManager.get('birthDate');
       const savedLifeExpectancy = await storageManager.get('lifeExpectancy');
       const savedLanguage = await storageManager.get('language');
@@ -539,6 +577,7 @@ const App = memo(() => {
       const savedHasAskedForNotification = await storageManager.get('hasAskedForNotificationPermission', { defaultValue: false });
 
       // Load saved data if available (with safe setState)
+      if (savedNickname) safeSetState(setNickname, savedNickname);
       if (savedBirthDate) safeSetState(setBirthDate, savedBirthDate);
       if (savedLifeExpectancy) safeSetState(setLifeExpectancy, savedLifeExpectancy);
       safeSetState(setOnboardingComplete, savedOnboardingComplete);
@@ -632,61 +671,63 @@ const App = memo(() => {
     }
   };
 
+  /**
+   * Toggles between dark and light theme with smooth fade animation.
+   * Provides visual feedback through opacity transition.
+   */
   const toggleTheme = async () => {
     try {
       triggerHaptic('light');
-      const newTheme = !isDarkTheme;
-      safeSetState(setIsDarkTheme, newTheme);
-      safeSetState(setCurrentTheme, newTheme ? darkTheme : lightTheme);
-      await storageManager.set('isDarkTheme', newTheme);
+
+      // Fade out animation
+      Animated.timing(themeOpacity, {
+        toValue: 0.7,
+        duration: 150,
+        useNativeDriver: true,
+      }).start(() => {
+        // Change theme at the midpoint of animation
+        const newTheme = !isDarkTheme;
+        safeSetState(setIsDarkTheme, newTheme);
+        safeSetState(setCurrentTheme, newTheme ? darkTheme : lightTheme);
+
+        // Fade in animation
+        Animated.timing(themeOpacity, {
+          toValue: 1,
+          duration: 150,
+          useNativeDriver: true,
+        }).start();
+      });
+
+      await storageManager.set('isDarkTheme', !isDarkTheme);
     } catch (error) {
       console.error('Failed to save theme:', error);
+      // Reset opacity on error
+      Animated.timing(themeOpacity, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+      }).start();
     }
   };
 
-  const handleStart = async () => {
-    if (!birthDate) {
-      triggerHaptic('error');
-      Alert.alert(t('errorTitle'), t('errorBirthDate'));
-      return;
-    }
-
-    // 수명 검증
-    if (!isLifeExpectancyValid || !lifeExpectancy) {
-      triggerHaptic('error');
-      Alert.alert(t('errorTitle'), lifeExpectancyError || t('errorLifeExpectancy'));
-      return;
-    }
-
-    triggerHaptic('success');
-    console.log('🚀 Starting CHALNA timer');
-    calculateTimeLeft();
-    safeSetState(setIsActive, true);
-    safeSetState(setLastCalculationTime, Date.now());
-    safeSetState(setIsBackgroundPaused, false);
-    await saveData();
-
-    // 알림 서비스 시작 (비동기, 타이머와 독립적)
-    setTimeout(() => {
-      startNotificationService();
-    }, 500);
-  };
-
-  const handleStop = () => {
-    triggerHaptic('medium');
-    console.log('🛑 Stopping CHALNA timer');
-    safeSetState(setIsActive, false);
-    safeSetState(setIsBackgroundPaused, false);
-    saveData();
-
-    // 알림 서비스 중지
-    stopNotificationService();
-  };
 
   const handleOnboardingComplete = async () => {
     triggerHaptic('success');
     safeSetState(setOnboardingComplete, true);
     await storageManager.set('onboardingComplete', true);
+
+    // 온보딩 완료 후 즉시 타이머 시작
+    console.log('🚀 Starting CHALNA timer after onboarding');
+    calculateTimeLeft();
+    safeSetState(setIsActive, true);
+    safeSetState(setLastCalculationTime, Date.now());
+    safeSetState(setIsBackgroundPaused, false);
+
+    // 알림 서비스 시작
+    const timeoutId = setTimeout(() => {
+      startNotificationService();
+    }, 500);
+    addTimeout(timeoutId);
   };
 
   // 알림 권한 확인 및 요청
@@ -771,7 +812,7 @@ const App = memo(() => {
 
       // 알림 서비스 시작
       console.log('🔔 Starting notification service...');
-      NotificationService.startNotificationService(birthDate, parseInt(lifeExpectancy));
+      NotificationService.startNotificationService(birthDate, parseInt(lifeExpectancy, 10));
 
     } catch (error) {
       console.error('❌ Error starting notification service:', error);
@@ -796,16 +837,8 @@ const App = memo(() => {
     } catch (error) {
       console.error('Failed to change language:', error);
     }
-  }, [safeSetState]);
+  }, [i18n, safeSetState]);
 
-  const handleDateChange = useCallback((event: any, selectedDate?: Date) => {
-    safeSetState(setShowDatePicker, false);
-    if (selectedDate && isMountedRef.current) {
-      const formattedDate = selectedDate.toISOString().split('T')[0];
-      safeSetState(setBirthDate, formattedDate);
-      safeSetState(setSelectedDate, selectedDate);
-    }
-  }, [safeSetState]);
 
   if (isLoading) {
     return (
@@ -840,204 +873,77 @@ const App = memo(() => {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <StatusBar
-            barStyle={isDarkTheme ? 'light-content' : 'dark-content'}
-            backgroundColor={currentTheme.background}
-          />
+          <Animated.View style={{ flex: 1, opacity: themeOpacity }}>
+            <StatusBar
+              barStyle={isDarkTheme ? 'light-content' : 'dark-content'}
+              backgroundColor={currentTheme.background}
+            />
 
-          {/* Header */}
+            {/* Header - 심플화 */}
           <View style={styles.header}>
-          <TouchableOpacity
-            onPress={toggleTheme}
-            style={[styles.themeButton, { borderColor: currentTheme.accent }]}
-            accessibilityLabel={isDarkTheme ? t('switchToLight') : t('switchToDark')}
-            accessibilityHint={t('toggleThemeHint')}
-          >
-            <Text style={[styles.themeButtonText, { color: currentTheme.accent }]}>
-              {isDarkTheme ? '☀️' : '🌙'}
-            </Text>
-          </TouchableOpacity>
-
-          <View style={styles.titleContainer}>
-            <Text
-              style={[styles.title, { color: currentTheme.primary }]}
-              accessibilityRole="header"
+            {/* 왼쪽: 테마 토글 */}
+            <AnimatedButton
+              onPress={toggleTheme}
+              style={[styles.iconButton, { borderColor: currentTheme.accent }]}
+              accessibilityLabel={isDarkTheme ? t('switchToLight') : t('switchToDark')}
             >
-              {t('title')}
-            </Text>
-            <Text
-              style={[styles.subtitle, { color: currentTheme.accent }]}
-              accessibilityRole="text"
-            >
-              Every Moment Matters
-            </Text>
-          </View>
-
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              onPress={() => safeSetState(setShowLanguageModal, true)}
-              style={[styles.languageButton, { backgroundColor: currentTheme.primary, borderColor: currentTheme.accent }]}
-              accessibilityLabel={t('selectLanguage')}
-              accessibilityHint={t('selectLanguageHint')}
-            >
-              <Text style={styles.languageButtonText}>
-                {languages.find(lang => lang.code === i18n.language)?.name.slice(0, 2) || 'KO'}
+              <Text style={[styles.iconButtonText, { color: currentTheme.accent }]}>
+                {isDarkTheme ? '☀️' : '🌙'}
               </Text>
-            </TouchableOpacity>
+            </AnimatedButton>
 
-            <TouchableOpacity
+            {/* 가운데: 비워둠 (타이머가 중앙에 올 것) */}
+            <View style={styles.headerSpacer} />
+
+            {/* 오른쪽: 설정 아이콘 (모래시계) */}
+            <AnimatedButton
               onPress={() => {
                 triggerHaptic('medium');
                 safeSetState(setShowSettingsModal, true);
               }}
-              style={[styles.settingsButton, { borderColor: currentTheme.accent }]}
+              style={[styles.iconButton]}
               accessibilityLabel={t('settings')}
-              accessibilityHint="Open settings"
             >
-              <Text style={[styles.settingsButtonText, { color: currentTheme.accent }]}>
-                ⚙️
-              </Text>
-            </TouchableOpacity>
+              <HourglassIcon size={24} color={currentTheme.accent} strokeWidth={1.5} />
+            </AnimatedButton>
           </View>
+
+        {/* 닉네임 표시 - 상단 중앙 */}
+        <View style={styles.nicknameSection}>
+          <Text style={[styles.nicknameText, { color: currentTheme.text }]}>
+            {nickname ? `${nickname}${t('nicknameTimeSuffix')}` : t('yourTime')}
+          </Text>
         </View>
 
-        {/* Input Section */}
-        <View style={styles.inputSection}>
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: currentTheme.text }]}>
-              {t('birthDateLabel')}
-            </Text>
-            <TouchableOpacity
-              onPress={() => safeSetState(setShowDatePicker, true)}
-              style={[styles.input, styles.inputWithBorder, styles.datePickerButton, { backgroundColor: currentTheme.input, borderColor: currentTheme.accent }]}
-              accessibilityLabel={t('birthDateLabel')}
-              accessibilityHint={t('selectBirthDateHint')}
-            >
-              <Text style={[styles.inputText, { color: birthDate ? currentTheme.text : currentTheme.placeholder }]}>
-                {birthDate || t('birthDatePlaceholder')}
-              </Text>
-              <Text style={[styles.calendarIcon, { color: currentTheme.accent }]}>
-                📅
-              </Text>
-            </TouchableOpacity>
-          </View>
+        {/* 타이머 디스플레이 - 깔끔한 한 줄 형식 */}
+        <View style={styles.timerContainer}>
+          <View style={styles.timerContent}>
+            {/* 일수 (큰 숫자) */}
+            <View style={styles.mainTimeDisplay}>
+              <Text style={[styles.mainTimeValue, { color: currentTheme.primary }]}>
+                {(() => {
+                  if (!birthDate || !lifeExpectancy) return 0;
 
-          <View style={styles.inputGroup}>
-            <View style={styles.labelRow}>
-              <Text style={[styles.label, { color: currentTheme.text }]}>
-                {t('lifeExpectancyLabel')}
+                  const now = new Date();
+                  const localBirth = new Date(birthDate + 'T00:00:00');
+                  const localExpectedDeath = new Date(localBirth);
+                  localExpectedDeath.setFullYear(localBirth.getFullYear() + parseInt(lifeExpectancy, 10));
+
+                  const difference = localExpectedDeath.getTime() - now.getTime();
+                  const totalDays = Math.floor(difference / (1000 * 60 * 60 * 24));
+                  return totalDays > 0 ? totalDays.toLocaleString() : 0;
+                })()}
               </Text>
-              {birthDate && (
-                <TouchableOpacity
-                  onPress={() => {
-                    const suggested = calculateSuggestedLifeExpectancy(birthDate);
-                    handleLifeExpectancyChange(suggested.toString());
-                    triggerHaptic('light');
-                  }}
-                  style={styles.suggestionButton}
-                >
-                  <Text style={[styles.suggestionText, { color: currentTheme.accent }]}>
-                    {t('suggestedLifeExpectancy', { years: calculateSuggestedLifeExpectancy(birthDate) })}
-                  </Text>
-                </TouchableOpacity>
-              )}
+              <Text style={[styles.mainTimeUnit, { color: currentTheme.text }]}>
+                {t('days')}
+              </Text>
             </View>
-            <TextInput
-              style={[
-                styles.input,
-                styles.inputWithBorder,
-                {
-                  backgroundColor: currentTheme.input,
-                  color: currentTheme.text,
-                  borderColor: lifeExpectancyError ? '#ff4444' : currentTheme.accent,
-                  borderWidth: lifeExpectancyError ? 2 : 1.5,
-                },
-              ]}
-              value={lifeExpectancy}
-              onChangeText={handleLifeExpectancyChange}
-              placeholder={t('lifeExpectancyPlaceholder')}
-              placeholderTextColor={currentTheme.placeholder}
-              keyboardType="numeric"
-              maxLength={3}
-              accessibilityLabel={t('lifeExpectancyLabel')}
-              accessibilityHint={t('lifeExpectancyHint')}
-            />
-            {lifeExpectancyError && (
-              <View style={styles.errorContainer}>
-                <Text style={styles.errorIcon}>⚠️</Text>
-                <Text style={styles.errorText}>{lifeExpectancyError}</Text>
-              </View>
-            )}
-            {isLifeExpectancyValid && lifeExpectancy && birthDate && (
-              <View style={styles.successContainer}>
-                <Text style={styles.successIcon}>✅</Text>
-                <Text style={[styles.successText, { color: '#4CAF50' }]}>
-                  {t('lifeExpectancySuccess', {
-                    years: Math.max(0, parseInt(lifeExpectancy) - Math.floor((Date.now() - new Date(birthDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25)))
-                  })}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
 
-        {/* Time Display */}
-        <View style={styles.timeSection}>
-          <View style={[styles.timeHeader, { borderBottomColor: currentTheme.accent }]}>
-            <Text style={[styles.timeTitle, { color: currentTheme.primary }]}>
-              ⏳ {t('timeLeftTitle')}
-            </Text>
-            <Text style={[styles.philosophicalQuote, { color: currentTheme.accent }]}>
-              "{t('timeLeftPhilosophy')}"
-            </Text>
-          </View>
-
-          <View style={[styles.timeDisplay, { backgroundColor: currentTheme.surface, borderColor: currentTheme.accent }]}>
-            <View style={styles.timeRow}>
-              <TimeCard
-                value={timeLeft.years}
-                label={t('years')}
-                color={currentTheme.primary}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.primary}
-              />
-              <TimeCard
-                value={timeLeft.months}
-                label={t('months')}
-                color={currentTheme.primary}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.primary}
-              />
-              <TimeCard
-                value={timeLeft.days}
-                label={t('days')}
-                color={currentTheme.primary}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.primary}
-              />
-            </View>
-            <View style={styles.timeRow}>
-              <TimeCard
-                value={timeLeft.hours}
-                label={t('hours')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.accent}
-              />
-              <TimeCard
-                value={timeLeft.minutes}
-                label={t('minutes')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.accent}
-              />
-              <TimeCard
-                value={timeLeft.seconds}
-                label={t('seconds')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.background}
-                borderColor={currentTheme.accent}
-              />
+            {/* 시간/분/초 (작은 숫자) */}
+            <View style={styles.subTimeDisplay}>
+              <Text style={[styles.subTimeText, { color: currentTheme.text }]}>
+                {timeLeft.hours}{t('hours')} {timeLeft.minutes}{t('minutes')} {timeLeft.seconds}{t('seconds')}
+              </Text>
             </View>
           </View>
         </View>
@@ -1060,81 +966,64 @@ const App = memo(() => {
           </View>
         )}
 
-        {/* Control Buttons */}
-        <View style={styles.buttonContainer}>
-          {!isActive ? (
-            <TouchableOpacity
-              style={[styles.button, styles.startButton, { backgroundColor: currentTheme.primary, borderColor: currentTheme.accent }]}
-              onPress={handleStart}
-              accessibilityLabel={t('startButton')}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.buttonText, styles.startButtonText]}>
-                ▶️ {t('startButton')}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.button, styles.stopButton, { backgroundColor: currentTheme.accent, borderColor: currentTheme.primary }]}
-              onPress={handleStop}
-              accessibilityLabel={t('stopButton')}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.buttonText, styles.stopButtonText]}>
-                ⏸️ {t('stopButton')}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
         {/* Language Modal */}
         <Modal
           visible={showLanguageModal}
           transparent={true}
           animationType="slide"
-          onRequestClose={() => safeSetState(setShowLanguageModal, false)}
+          onRequestClose={() => {
+            triggerHaptic('light');
+            safeSetState(setShowLanguageModal, false);
+          }}
+          statusBarTranslucent={true}
         >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: currentTheme.background }]}>
-              <Text style={[styles.modalTitle, { color: currentTheme.text }]}>
-                {t('selectLanguage')}
-              </Text>
-              <FlatList
-                data={languages}
-                keyExtractor={(item) => item.code}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={[styles.languageItem, { backgroundColor: currentTheme.input }]}
-                    onPress={() => handleLanguageChange(item.code)}
+          <TouchableWithoutFeedback
+            onPress={() => {
+              triggerHaptic('light');
+              safeSetState(setShowLanguageModal, false);
+            }}
+          >
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={[styles.modalContent, { backgroundColor: currentTheme.background }]}>
+                  <Text style={[styles.modalTitle, { color: currentTheme.text }]}>
+                    {t('selectLanguage')}
+                  </Text>
+                  <FlatList
+                    data={languages}
+                    keyExtractor={(item) => item.code}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={[styles.languageItem, { backgroundColor: currentTheme.input }]}
+                        onPress={() => {
+                          triggerHaptic('light');
+                          handleLanguageChange(item.code);
+                        }}
+                        accessibilityLabel={`Select ${item.name}`}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.languageItemText, { color: currentTheme.text }]}>
+                          {item.name}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  />
+                  <AnimatedButton
+                    style={[styles.closeButton, { backgroundColor: currentTheme.primary }]}
+                    onPress={() => {
+                      triggerHaptic('light');
+                      safeSetState(setShowLanguageModal, false);
+                    }}
+                    accessibilityLabel={t('close')}
+                    accessibilityRole="button"
                   >
-                    <Text style={[styles.languageItemText, { color: currentTheme.text }]}>
-                      {item.name}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-              <TouchableOpacity
-                style={[styles.closeButton, { backgroundColor: currentTheme.primary }]}
-                onPress={() => safeSetState(setShowLanguageModal, false)}
-                accessibilityLabel={t('close')}
-                accessibilityHint={t('closeModalHint')}
-              >
-                <Text style={styles.closeButtonText}>{t('close')}</Text>
-              </TouchableOpacity>
+                    <Text style={styles.closeButtonText}>{t('close')}</Text>
+                  </AnimatedButton>
+                </View>
+              </TouchableWithoutFeedback>
             </View>
-          </View>
+          </TouchableWithoutFeedback>
         </Modal>
-
-        {/* Date Picker */}
-        {showDatePicker && (
-          <DateTimePicker
-            value={selectedDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={handleDateChange}
-            maximumDate={new Date()}
-          />
-        )}
 
         {/* Settings Modal */}
         <Settings
@@ -1148,6 +1037,7 @@ const App = memo(() => {
             safeSetState(setShowLanguageModal, true);
           }}
         />
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </ErrorBoundary>
@@ -1166,55 +1056,67 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.xl,
+    marginBottom: spacing.md,
     marginTop: 30,
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
   },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  themeButton: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 48,
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  themeButtonText: {
-    fontSize: 20,
-  },
-  settingsButton: {
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    minWidth: 48,
-    minHeight: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingsButtonText: {
-    fontSize: 20,
-  },
-  titleContainer: {
+  headerSpacer: {
     flex: 1,
+  },
+  iconButton: {
+    padding: 8,
+    borderRadius: 8,
+    minWidth: 40,
+    minHeight: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconButtonText: {
+    fontSize: 20,
+  },
+  nicknameSection: {
+    alignItems: 'center',
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  nicknameText: {
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.regular,
+    letterSpacing: 0.5,
+    opacity: 0.7,
+  },
+  timerContainer: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  title: {
-    fontSize: typography.displayLarge,
-    fontWeight: typography.weight.bold,
-    textAlign: 'center',
-    letterSpacing: 1,
+  timerContent: {
+    alignItems: 'center',
   },
-  subtitle: {
-    fontSize: typography.labelSmall,
-    fontStyle: 'italic',
-    textAlign: 'center',
+  mainTimeDisplay: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  mainTimeValue: {
+    fontSize: 72,
+    fontWeight: typography.weight.bold,
+    letterSpacing: -2,
+  },
+  mainTimeUnit: {
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.regular,
     marginTop: spacing.xs,
+    opacity: 0.6,
+  },
+  subTimeDisplay: {
+    alignItems: 'center',
+  },
+  subTimeText: {
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.regular,
     letterSpacing: 0.5,
+    opacity: 0.8,
   },
   languageButton: {
     padding: 12,
@@ -1304,7 +1206,7 @@ const styles = StyleSheet.create({
     fontSize: typography.headlineMedium,
     fontWeight: typography.weight.regular,
   },
-  datePickerButton: {
+  datePickerButtonOld: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -1474,6 +1376,77 @@ const styles = StyleSheet.create({
     fontWeight: typography.weight.medium,
     textAlign: 'center',
     letterSpacing: 0.3,
+  },
+  datePickerModal: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  datePickerContainer: {
+    width: '85%',
+    padding: 24,
+    borderRadius: 16,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    width: '100%',
+  },
+  datePickerTitle: {
+    fontSize: typography.headlineLarge,
+    fontWeight: typography.weight.bold,
+    flex: 1,
+  },
+  datePickerDoneButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  datePickerDoneText: {
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.bold,
+  },
+  dateInputRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  dateInput: {
+    width: 70,
+    height: 50,
+    borderWidth: 2,
+    borderRadius: 8,
+    textAlign: 'center',
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.medium,
+  },
+  dateSeparator: {
+    fontSize: typography.headlineLarge,
+    marginHorizontal: 8,
+    fontWeight: typography.weight.bold,
+  },
+  datePickerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  datePickerButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  datePickerButtonText: {
+    fontSize: typography.headlineMedium,
+    fontWeight: typography.weight.bold,
   },
 });
 

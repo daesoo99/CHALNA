@@ -42,9 +42,11 @@ class CrashReporter {
 
   // 전역 에러 핸들러 설정 (간소화)
   setupGlobalErrorHandler(): void {
-    const originalHandler = (global as any).ErrorUtils?.getGlobalHandler?.();
+    // @ts-ignore - React Native global object
+    const originalHandler = global?.ErrorUtils?.getGlobalHandler?.();
 
-    (global as any).ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
+    // @ts-ignore - React Native global object
+    global?.ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
       this.reportCrash(error);
 
       // 원래 핸들러도 호출

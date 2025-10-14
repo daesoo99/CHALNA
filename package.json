@@ -16,16 +16,16 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/datetimepicker": "^8.4.5",
     "@react-native-community/push-notification-ios": "^1.11.0",
     "@react-native/new-app-screen": "0.81.1",
     "i18next": "^25.5.2",
     "react": "19.1.0",
     "react-i18next": "^15.7.3",
     "react-native": "0.81.1",
-    "react-native-document-picker": "^9.3.1",
     "react-native-haptic-feedback": "^2.3.3",
     "react-native-push-notification": "^8.1.1",
-    "react-native-share": "^12.2.0"
+    "react-native-svg": "^15.13.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

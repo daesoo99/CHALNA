@@ -23,6 +23,12 @@ class NotificationService {
 
   private initialize = () => {
     if (!this.isConfigured) {
+      // Check if SharedPrefs is available when using native service
+      if (this.useNativeService && !SharedPrefs) {
+        console.error('SharedPrefs native module not found, falling back to React Native notifications');
+        this.useNativeService = false;
+      }
+
       this.configure();
       if (!this.useNativeService) {
         this.createChannel();
@@ -126,6 +132,7 @@ class NotificationService {
     if (this.useNativeService && SharedPrefs) {
       SharedPrefs.stopNotificationService();
     } else {
+      // @ts-ignore - Method exists in library
       PushNotification.cancelLocalNotifications({id: 1});
     }
   };
@@ -154,6 +161,7 @@ class NotificationService {
           });
         });
       } else {
+        // @ts-ignore - Method exists in library
         await PushNotification.requestPermissions();
         return true;
       }
@@ -210,6 +218,7 @@ class NotificationService {
 
     if (!this.useNativeService) {
       // Clear any pending notifications
+      // @ts-ignore - Method exists in library
       PushNotification.abandonPermissions();
     }
 
