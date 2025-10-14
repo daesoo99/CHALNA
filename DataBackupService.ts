@@ -1,7 +1,7 @@
 // DataBackupService.ts - CHALNA 데이터 백업/복구 서비스
 import { Platform, Alert } from 'react-native';
-import Share from 'react-native-share';
-import DocumentPicker from 'react-native-document-picker';
+// import Share from 'react-native-share';
+// import DocumentPicker from 'react-native-document-picker';
 import { storageManager } from './StorageManager';
 import { SecurityAuditor } from './SecurityAuditor';
 import i18n from './i18n';
@@ -67,6 +67,14 @@ export class DataBackupService {
    * Share API를 사용하여 JSON 파일로 내보내기
    */
   async exportData(): Promise<void> {
+    // 기능 준비 중
+    Alert.alert(
+      i18n.t('settingsDataBackup'),
+      i18n.t('featureComingSoon') || '이 기능은 준비 중입니다.'
+    );
+    return;
+
+    /* DISABLED - react-native-share not installed
     try {
       // 1. 모든 백업 데이터 수집
       const backupData = await this.collectBackupData();
@@ -108,6 +116,7 @@ export class DataBackupService {
       console.error('Export error:', error);
       throw error;
     }
+    */
   }
 
   /**
@@ -115,6 +124,14 @@ export class DataBackupService {
    * Document Picker를 사용하여 JSON 파일 선택 및 복구
    */
   async importData(): Promise<boolean> {
+    // 기능 준비 중
+    Alert.alert(
+      i18n.t('settingsDataRestore'),
+      i18n.t('featureComingSoon') || '이 기능은 준비 중입니다.'
+    );
+    return false;
+
+    /* DISABLED - react-native-document-picker not installed
     try {
       // 1. 복구 확인 Alert
       return new Promise((resolve) => {
@@ -161,6 +178,7 @@ export class DataBackupService {
       console.error('Import error:', error);
       return false;
     }
+    */
   }
 
   /**

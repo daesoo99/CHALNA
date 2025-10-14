@@ -9,6 +9,7 @@ import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
 import com.facebook.react.defaults.DefaultReactNativeHost
+import com.kimdaesoo.deathclock.SharedPrefsPackage
 // AsyncStorage will be auto-linked
 
 class MainApplication : Application(), ReactApplication {
@@ -23,7 +24,7 @@ class MainApplication : Application(), ReactApplication {
 
         override fun getJSMainModuleName(): String = "index"
 
-        override fun getUseDeveloperSupport(): Boolean = false
+        override fun getUseDeveloperSupport(): Boolean = BuildConfig.DEBUG
 
         override val isNewArchEnabled: Boolean = false
         override val isHermesEnabled: Boolean = true

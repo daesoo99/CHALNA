@@ -2,6 +2,7 @@ import React, { useState, useEffect, memo } from 'react';
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   TouchableOpacity,
   Switch,
@@ -14,7 +15,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import { typography, spacing, Theme } from './themes';
 import { storageManager } from './StorageManager';
-import ReactNativeHapticFeedback from 'react-native-haptic-feedback';
 import { DataBackupService } from './DataBackupService';
 
 // Legal document URLs - GitHub Pages
@@ -54,43 +54,42 @@ const Settings = memo<SettingsProps>(({
     sound: true,
     vibration: true,
   });
+  const [nickname, setNickname] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [lifeExpectancy, setLifeExpectancy] = useState('80');
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
+  const [tempNickname, setTempNickname] = useState('');
 
-  // 햅틱 피드백 헬퍼
-  const triggerHaptic = (type: 'light' | 'medium' | 'success' | 'error' = 'light') => {
-    const hapticOptions = {
-      enableVibrateFallback: true,
-      ignoreAndroidSystemSettings: false,
-    };
-
-    switch (type) {
-      case 'light':
-        ReactNativeHapticFeedback.trigger('impactLight', hapticOptions);
-        break;
-      case 'medium':
-        ReactNativeHapticFeedback.trigger('impactMedium', hapticOptions);
-        break;
-      case 'success':
-        ReactNativeHapticFeedback.trigger('notificationSuccess', hapticOptions);
-        break;
-      case 'error':
-        ReactNativeHapticFeedback.trigger('notificationError', hapticOptions);
-        break;
-    }
+  // Haptic feedback utility
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' | 'success' | 'error' = 'light') => {
+    // Haptic feedback disabled for React Native 0.81 compatibility
+    console.log('Haptic feedback (disabled):', type);
   };
 
-  // 알림 설정 불러오기
+  // 알림 설정 및 사용자 정보 불러오기
   useEffect(() => {
-    loadNotificationSettings();
-  }, []);
+    if (visible) {
+      loadSettings();
+    }
+  }, [visible]);
 
-  const loadNotificationSettings = async () => {
+  const loadSettings = async () => {
     try {
       const settings = await storageManager.get('notificationSettings');
       if (settings) {
         setNotificationSettings(settings);
       }
+
+      // 사용자 정보 불러오기
+      const savedNickname = await storageManager.get('nickname');
+      const savedBirthDate = await storageManager.get('birthDate');
+      const savedLifeExpectancy = await storageManager.get('lifeExpectancy');
+
+      if (savedNickname) setNickname(savedNickname);
+      if (savedBirthDate) setBirthDate(savedBirthDate);
+      if (savedLifeExpectancy) setLifeExpectancy(savedLifeExpectancy);
     } catch (error) {
-      console.error('Failed to load notification settings:', error);
+      console.error('Failed to load settings:', error);
     }
   };
 
@@ -231,6 +230,33 @@ const Settings = memo<SettingsProps>(({
     );
   };
 
+  // 닉네임 편집 시작
+  const handleStartEditNickname = () => {
+    setTempNickname(nickname);
+    setIsEditingNickname(true);
+    triggerHaptic('light');
+  };
+
+  // 닉네임 저장
+  const handleSaveNickname = async () => {
+    try {
+      await storageManager.set('nickname', tempNickname);
+      setNickname(tempNickname);
+      setIsEditingNickname(false);
+      triggerHaptic('success');
+      Alert.alert(t('success'), t('settingsNicknameUpdated'));
+    } catch (error) {
+      triggerHaptic('error');
+      Alert.alert(t('errorTitle'), t('settingsNicknameUpdateError'));
+    }
+  };
+
+  // 닉네임 편집 취소
+  const handleCancelEditNickname = () => {
+    setIsEditingNickname(false);
+    triggerHaptic('light');
+  };
+
   // 섹션 헤더 컴포넌트
   const SectionHeader = ({ title }: { title: string }) => (
     <View style={[styles.sectionHeader, { borderBottomColor: currentTheme.accent }]}>
@@ -272,8 +298,9 @@ const Settings = memo<SettingsProps>(({
     <Modal
       visible={visible}
       animationType="slide"
+      transparent={false}
       onRequestClose={onClose}
-      presentationStyle="fullScreen"
+      statusBarTranslucent={false}
     >
       <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
         {/* Header */}
@@ -287,6 +314,8 @@ const Settings = memo<SettingsProps>(({
               onClose();
             }}
             style={[styles.closeButton, { backgroundColor: currentTheme.primary }]}
+            accessibilityLabel={t('close')}
+            accessibilityRole="button"
           >
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
@@ -297,6 +326,75 @@ const Settings = memo<SettingsProps>(({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
+          {/* 섹션 0: 개인 정보 */}
+          <SectionHeader title={t('settingsPersonalInfo')} />
+          <View style={styles.section}>
+            <View style={[styles.settingItem, { backgroundColor: currentTheme.surface }]}>
+              <Text style={[styles.settingLabel, { color: currentTheme.text }]}>
+                {t('settingsNickname')}
+              </Text>
+              {!isEditingNickname ? (
+                <TouchableOpacity onPress={handleStartEditNickname}>
+                  <Text style={[styles.settingValue, { color: currentTheme.accent }]}>
+                    {nickname || t('settingsNicknameNotSet')}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.nicknameEditContainer}>
+                  <TextInput
+                    style={[
+                      styles.nicknameInput,
+                      {
+                        backgroundColor: currentTheme.input,
+                        color: currentTheme.text,
+                        borderColor: currentTheme.accent,
+                      },
+                    ]}
+                    value={tempNickname}
+                    onChangeText={setTempNickname}
+                    placeholder={t('settingsNicknamePlaceholder')}
+                    placeholderTextColor={currentTheme.placeholder}
+                    maxLength={20}
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    style={[styles.saveButton, { backgroundColor: currentTheme.primary }]}
+                    onPress={handleSaveNickname}
+                  >
+                    <Text style={styles.saveButtonText}>{t('save')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.cancelButton, { borderColor: currentTheme.accent }]}
+                    onPress={handleCancelEditNickname}
+                  >
+                    <Text style={[styles.cancelButtonText, { color: currentTheme.accent }]}>
+                      {t('cancel')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            <SettingItem
+              label={t('settingsBirthDate')}
+              rightElement={
+                <Text style={[styles.settingValue, { color: currentTheme.text }]}>
+                  {birthDate || t('settingsNotSet')}
+                </Text>
+              }
+            />
+
+            <SettingItem
+              label={t('settingsLifeExpectancy')}
+              showBorder={false}
+              rightElement={
+                <Text style={[styles.settingValue, { color: currentTheme.text }]}>
+                  {lifeExpectancy ? `${lifeExpectancy}${t('years')}` : t('settingsNotSet')}
+                </Text>
+              }
+            />
+          </View>
+
           {/* 섹션 1: 알림 설정 */}
           <SectionHeader title={t('settingsNotification')} />
           <View style={styles.section}>
@@ -642,6 +740,38 @@ const styles = StyleSheet.create({
     fontSize: typography.labelSmall,
     textAlign: 'center',
     lineHeight: 18,
+  },
+  nicknameEditContainer: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 8,
+    marginLeft: spacing.md,
+  },
+  nicknameInput: {
+    borderRadius: 8,
+    borderWidth: 1,
+    padding: 10,
+    fontSize: typography.bodyMedium,
+  },
+  saveButton: {
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: typography.bodyMedium,
+    fontWeight: typography.weight.semiBold,
+  },
+  cancelButton: {
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    fontSize: typography.bodyMedium,
+    fontWeight: typography.weight.semiBold,
   },
 });
 

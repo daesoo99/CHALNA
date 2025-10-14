@@ -52,3 +52,21 @@ org.gradle.configureondemand=true
 org.gradle.caching=true
 android.enableR8=true
 android.enableR8.fullMode=true
+
+# ============================================
+# CHALNA Release Signing Configuration
+# ============================================
+# WARNING: Keep these values SECRET!
+# This file is in .gitignore - DO NOT commit to Git!
+
+# Keystore file name (relative to android/app/)
+CHALNA_RELEASE_STORE_FILE=release.keystore
+
+# Key alias used when creating the keystore
+CHALNA_RELEASE_KEY_ALIAS=deathclock-key
+
+# Keystore password (update with your actual password)
+CHALNA_RELEASE_STORE_PASSWORD=YOUR_STORE_PASSWORD_HERE
+
+# Key password (update with your actual password)
+CHALNA_RELEASE_KEY_PASSWORD=YOUR_KEY_PASSWORD_HERE
