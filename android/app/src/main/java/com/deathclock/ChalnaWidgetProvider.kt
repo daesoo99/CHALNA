@@ -10,7 +10,7 @@ import android.widget.RemoteViews
 import java.util.*
 import kotlin.math.max
 
-class DeathClockWidgetProvider : AppWidgetProvider() {
+class ChalnaWidgetProvider : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         for (appWidgetId in appWidgetIds) {
@@ -19,10 +19,10 @@ class DeathClockWidgetProvider : AppWidgetProvider() {
     }
 
     private fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
-        val views = RemoteViews(context.packageName, R.layout.death_clock_widget)
+        val views = RemoteViews(context.packageName, R.layout.chalna_widget)
 
         // Get user data from SharedPreferences
-        val prefs = context.getSharedPreferences("DeathClockPrefs", Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences("ChalnaPrefs", Context.MODE_PRIVATE)
         val birthYear = prefs.getInt("birthYear", 1990)
         val birthMonth = prefs.getInt("birthMonth", 1)
         val birthDay = prefs.getInt("birthDay", 1)

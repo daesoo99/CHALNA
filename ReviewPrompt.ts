@@ -49,9 +49,11 @@ class ReviewPrompt {
   }
 
   private static async showReviewPrompt(): Promise<void> {
+    // Note: In a production app, these strings should come from i18n
+    // For now using hardcoded Korean text
     Alert.alert(
-      '⭐ Death Clock을 평가해주세요',
-      'Death Clock이 도움이 되셨나요? 앱스토어에서 평가해주시면 큰 도움이 됩니다!',
+      '⭐ CHALNA를 평가해주세요',
+      'CHALNA가 도움이 되셨나요? 앱스토어에서 평가해주시면 큰 도움이 됩니다!',
       [
         {
           text: '나중에',
@@ -86,7 +88,7 @@ class ReviewPrompt {
         const url = `itms-apps://itunes.apple.com/app/id${appId}?action=write-review`;
         await Linking.openURL(url);
       } else if (Platform.OS === 'android') {
-        const packageName = 'com.kimdaesoo.deathclock';
+        const packageName = 'com.kimdaesoo.chalna';
         const url = `market://details?id=${packageName}`;
         await Linking.openURL(url);
       }
@@ -94,8 +96,8 @@ class ReviewPrompt {
       console.error('Failed to open app store:', error);
       // Fallback to web browser
       const fallbackUrl = Platform.OS === 'ios'
-        ? 'https://apps.apple.com/app/death-clock/id${appId}'
-        : 'https://play.google.com/store/apps/details?id=com.kimdaesoo.deathclock';
+        ? 'https://apps.apple.com/app/chalna/id${appId}'
+        : 'https://play.google.com/store/apps/details?id=com.kimdaesoo.chalna';
 
       try {
         await Linking.openURL(fallbackUrl);

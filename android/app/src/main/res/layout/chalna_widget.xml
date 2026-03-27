@@ -15,7 +15,7 @@
         android:text="CHALNA"
         android:textSize="14sp"
         android:textStyle="bold"
-        android:textColor="#ff6b6b"
+        android:textColor="#e8c547"
         android:layout_marginBottom="8dp" />
 
     <LinearLayout

@@ -13,7 +13,7 @@ export interface TimeLeft {
 }
 
 class NotificationService {
-  private notificationId = 'death_clock_notification';
+  private notificationId = 'chalna_notification';
   private isConfigured = false;
   private useNativeService = Platform.OS === 'android';
 

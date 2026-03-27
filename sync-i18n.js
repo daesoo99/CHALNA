@@ -7,9 +7,9 @@ const path = require('path');
 const translations = {
   // 기본 UI 텍스트
   "💀 사망 시계": {
-    en: "💀 Death Clock",
-    ja: "💀 デスクロック",
-    zh: "💀 死亡时钟"
+    en: "⏳ CHALNA",
+    ja: "⏳ チャルナ",
+    zh: "⏳ CHALNA"
   },
   "생년월일 (YYYY-MM-DD)": {
     en: "Birth Date (YYYY-MM-DD)",

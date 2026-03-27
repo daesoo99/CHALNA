@@ -25,7 +25,12 @@
       "Bash(\"/c/Users/kimdaesoo/AppData/Local/Android/Sdk/platform-tools/adb.exe\" install android/app/build/outputs/apk/debug/app-debug.apk)",
       "Bash(git log:*)",
       "Bash(git add:*)",
-      "Bash(git merge:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": []
