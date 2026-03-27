@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
   ScrollView,
   Animated,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
@@ -22,6 +24,7 @@ import Onboarding from './Onboarding';
 import NotificationService from './NotificationService';
 import Settings from './Settings';
 import { calculateTimeLeft, calculateTotalDays, calculateTotalHours } from './utils/timeCalculator';
+import TimeDisplay from './components/TimeDisplay';
 import './i18n';
 
 const App = memo(() => {
@@ -151,8 +154,30 @@ const App = memo(() => {
     );
     pulse.start();
 
-    return () => pulse.stop();
-  }, [pulseAnim]);
+    return () => {
+      pulse.stop();
+      pulseAnim.stopAnimation(); // 메모리 누수 방지
+    };
+    // pulseAnim은 useRef로 생성되어 변하지 않으므로 의존성에서 제외
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // 앱 백그라운드 복귀 시 상태 복원 (리로딩 방지)
+  useEffect(() => {
+    const appStateSubscription = AppState.addEventListener(
+      'change',
+      (nextAppState: AppStateStatus) => {
+        if (nextAppState === 'active') {
+          // 포그라운드 복귀 시 시간만 업데이트 (전체 리로드 없음)
+          updateTimeLeft();
+        }
+      }
+    );
+
+    return () => {
+      appStateSubscription.remove();
+    };
+  }, [updateTimeLeft]);
 
   // 언어 변경
   const handleLanguageSelect = async (languageCode: string) => {
@@ -283,12 +308,18 @@ const App = memo(() => {
               <TouchableOpacity
                 onPress={() => setShowSettingsModal(true)}
                 style={styles.headerIcon}
+                accessibilityLabel={t('settings')}
+                accessibilityHint="Open settings menu"
+                accessibilityRole="button"
               >
                 <Text style={styles.iconText}>⚙️</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setShowLanguageModal(true)}
                 style={styles.headerIcon}
+                accessibilityLabel={t('selectLanguage')}
+                accessibilityHint="Change language"
+                accessibilityRole="button"
               >
                 <Text style={styles.iconText}>🌐</Text>
               </TouchableOpacity>
@@ -296,50 +327,15 @@ const App = memo(() => {
           </View>
 
           {/* 메인 카드 - 토스 스타일 큰 카드 */}
-          <View style={[styles.mainCard, { backgroundColor: currentTheme.cardBackground }]}>
-            <Text style={[styles.cardTitle, { color: currentTheme.secondaryText }]}>
-              {t('timeRemaining')}
-            </Text>
-
-            {/* 핵심 숫자 - 토스처럼 크게 */}
-            <Text style={[styles.mainNumber, { color: currentTheme.text }]}>
-              {birthDate && lifeExpectancy
-                ? `${timeLeft.years} ${t('years')} ${timeLeft.months} ${t('months')} ${timeLeft.days} ${t('days')}`
-                : '--'}
-            </Text>
-
-            {/* 구분선 */}
-            <View style={[styles.divider, { backgroundColor: currentTheme.border }]} />
-
-            {/* 부가 정보 - 토스처럼 작게 */}
-            <View style={styles.subInfo}>
-              <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {totalDays.toLocaleString()} {t('days')}
-              </Text>
-              <Text style={[styles.subInfoDot, { color: currentTheme.placeholder }]}>•</Text>
-              <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {totalHours.toLocaleString()} {t('hours')}
-              </Text>
-            </View>
-
-            {/* 실시간 업데이트 표시 */}
-            <View style={styles.liveIndicator}>
-              <Animated.View
-                style={[
-                  styles.liveDot,
-                  {
-                    backgroundColor: currentTheme.primary,
-                    opacity: pulseAnim,
-                  },
-                ]}
-              />
-              <Text style={[styles.liveText, { color: currentTheme.secondaryText }]}>
-                {timeLeft.hours.toString().padStart(2, '0')}:
-                {timeLeft.minutes.toString().padStart(2, '0')}:
-                {timeLeft.seconds.toString().padStart(2, '0')}
-              </Text>
-            </View>
-          </View>
+          <TimeDisplay
+            timeLeft={timeLeft}
+            totalDays={totalDays}
+            totalHours={totalHours}
+            theme={currentTheme}
+            pulseAnim={pulseAnim}
+            birthDate={birthDate}
+            lifeExpectancy={lifeExpectancy}
+          />
         </ScrollView>
 
         {/* 언어 선택 모달 */}
@@ -456,62 +452,6 @@ const styles = StyleSheet.create({
   },
   iconText: {
     fontSize: 22, // Icon size, not from typography system
-  },
-  // 메인 카드 - 토스 스타일
-  mainCard: {
-    marginHorizontal: 24,
-    marginTop: 8,
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  cardTitle: {
-    fontSize: typography.bodyMedium,
-    fontWeight: typography.weight.medium,
-    marginBottom: spacing.md,
-    letterSpacing: -0.2,
-  },
-  mainNumber: {
-    fontSize: typography.displayLarge,
-    fontWeight: typography.weight.bold,
-    letterSpacing: -1,
-    marginBottom: spacing.lg - 4,
-  },
-  divider: {
-    height: 1,
-    marginVertical: spacing.md,
-  },
-  subInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  subInfoText: {
-    fontSize: typography.bodyMedium,
-    fontWeight: typography.weight.regular,
-  },
-  subInfoDot: {
-    fontSize: typography.labelSmall,
-  },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  liveText: {
-    fontSize: 13, // Specific size for time display
-    fontWeight: typography.weight.medium,
-    fontVariant: ['tabular-nums'],
   },
   // 모달
   modalOverlay: {

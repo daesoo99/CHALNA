@@ -32,7 +32,9 @@
       "Bash(npm run lint:*)",
       "Bash(npx tsc:*)",
       "Bash(git branch:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(npm install)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

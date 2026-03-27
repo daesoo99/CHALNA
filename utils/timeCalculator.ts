@@ -19,7 +19,8 @@ export interface TimeLeft {
  * @returns Date object representing expected death
  */
 function getExpectedDeathDate(birthDate: string, lifeExpectancy: string): Date {
-  const birth = new Date(birthDate + 'T00:00:00');
+  // UTC 타임존 명시로 1일 오차 방지
+  const birth = new Date(birthDate + 'T00:00:00.000Z');
   const lifeYears = parseInt(lifeExpectancy, 10);
 
   // NaN 검증
@@ -28,7 +29,7 @@ function getExpectedDeathDate(birthDate: string, lifeExpectancy: string): Date {
   }
 
   const expectedDeath = new Date(birth);
-  expectedDeath.setFullYear(birth.getFullYear() + lifeYears);
+  expectedDeath.setUTCFullYear(birth.getUTCFullYear() + lifeYears);
   return expectedDeath;
 }
 
@@ -50,15 +51,15 @@ export function calculateTimeLeft(
     return { years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 };
   }
 
-  let years = expectedDeath.getFullYear() - now.getFullYear();
-  let months = expectedDeath.getMonth() - now.getMonth();
+  let years = expectedDeath.getUTCFullYear() - now.getUTCFullYear();
+  let months = expectedDeath.getUTCMonth() - now.getUTCMonth();
 
   if (months < 0) {
     years--;
     months += 12;
   }
 
-  if (expectedDeath.getDate() < now.getDate()) {
+  if (expectedDeath.getUTCDate() < now.getUTCDate()) {
     months--;
     if (months < 0) {
       years--;
@@ -67,8 +68,8 @@ export function calculateTimeLeft(
   }
 
   const tempDate = new Date(now);
-  tempDate.setFullYear(tempDate.getFullYear() + years);
-  tempDate.setMonth(tempDate.getMonth() + months);
+  tempDate.setUTCFullYear(tempDate.getUTCFullYear() + years);
+  tempDate.setUTCMonth(tempDate.getUTCMonth() + months);
 
   const remainingMs = expectedDeath.getTime() - tempDate.getTime();
   const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
