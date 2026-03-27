@@ -167,7 +167,14 @@ const Settings = memo<SettingsProps>(({
           accentColor={currentTheme.accent}
         />
         <View style={styles.section}>
-          <View style={[styles.inputItem, { backgroundColor: currentTheme.cardBackground }]}>
+          <View style={[
+            styles.inputItem,
+            {
+              backgroundColor: currentTheme.cardBackground,
+              borderBottomWidth: 1,
+              borderBottomColor: currentTheme.border,
+            }
+          ]}>
             <Text style={[styles.inputLabel, { color: currentTheme.secondaryText }]}>
               {t('settingsNickname')}
             </Text>
@@ -190,7 +197,14 @@ const Settings = memo<SettingsProps>(({
             theme={currentTheme}
           />
 
-          <View style={[styles.inputItem, { backgroundColor: currentTheme.cardBackground }]}>
+          <View style={[
+            styles.inputItem,
+            {
+              backgroundColor: currentTheme.cardBackground,
+              borderBottomWidth: 1,
+              borderBottomColor: currentTheme.border,
+            }
+          ]}>
             <Text style={[styles.inputLabel, { color: currentTheme.secondaryText }]}>
               {t('settingsLifeExpectancy')}
             </Text>
@@ -349,8 +363,6 @@ const styles = StyleSheet.create({
   inputItem: {
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
   },
   inputLabel: {
     ...typography.caption,

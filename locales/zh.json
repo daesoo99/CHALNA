@@ -218,5 +218,12 @@
   "settingsNicknameUpdateError": "更新昵称失败。",
   "settingsBirthDate": "出生日期",
   "settingsNotSet": "未设置",
-  "save": "保存"
+  "save": "保存",
+  "settingsLifeExpectancy": "预期寿命",
+  "timeRemaining": "剩余时间",
+  "headerGreeting": "您好，{{name}}",
+  "statsBirthDate": "出生日期",
+  "statsLifeExpectancy": "预期寿命",
+  "onboardingLifeExpectancyHint": "平均预期寿命: 80岁",
+  "settingsSaved": "设置已保存"
 }

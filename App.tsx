@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback } from 'react';
+import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
@@ -37,13 +38,15 @@ const App = memo(() => {
     minutes: 0,
     seconds: 0,
   });
-  const [isActive, setIsActive] = useState(true);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isDarkTheme, setIsDarkTheme] = useState(true);
   const [currentTheme, setCurrentTheme] = useState<Theme>(darkTheme);
   const [isLoading, setIsLoading] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+
+  // Live dot 펄스 애니메이션
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const languages = [
     { code: 'ko', name: t('languageKorean') },
@@ -153,13 +156,34 @@ const App = memo(() => {
   }, []);
 
   useEffect(() => {
-    if (!isActive || !birthDate) return;
+    if (!birthDate) return;
 
     calculateTimeLeft();
     const interval = setInterval(calculateTimeLeft, 1000);
 
     return () => clearInterval(interval);
-  }, [isActive, birthDate, calculateTimeLeft]);
+  }, [birthDate, calculateTimeLeft]);
+
+  // Live dot 펄스 애니메이션 효과
+  useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.4,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+
+    return () => pulse.stop();
+  }, [pulseAnim]);
 
   // 언어 변경
   const handleLanguageSelect = async (languageCode: string) => {
@@ -186,7 +210,6 @@ const App = memo(() => {
     setBirthDate(data.birthDate);
     setLifeExpectancy(data.lifeExpectancy);
     setOnboardingComplete(true);
-    setIsActive(true);
 
     await Promise.all([
       storageManager.set('nickname', data.nickname),
@@ -242,7 +265,6 @@ const App = memo(() => {
             setNickname('');
             setBirthDate('');
             setLifeExpectancy('80');
-            setIsActive(false);
           },
         },
       ]
@@ -285,7 +307,7 @@ const App = memo(() => {
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={[styles.nicknameText, { color: currentTheme.text }]}>
-                {nickname}님
+                {t('headerGreeting', { name: nickname })}
               </Text>
             </View>
             <View style={styles.headerRight}>
@@ -307,12 +329,12 @@ const App = memo(() => {
           {/* 메인 카드 - 토스 스타일 큰 카드 */}
           <View style={[styles.mainCard, { backgroundColor: currentTheme.cardBackground }]}>
             <Text style={[styles.cardTitle, { color: currentTheme.secondaryText }]}>
-              남은 시간
+              {t('timeRemaining')}
             </Text>
 
             {/* 핵심 숫자 - 토스처럼 크게 */}
             <Text style={[styles.mainNumber, { color: currentTheme.text }]}>
-              {timeLeft.years}년 {timeLeft.months}개월 {timeLeft.days}일
+              {timeLeft.years}{t('years')} {timeLeft.months}{t('months')} {timeLeft.days}{t('days')}
             </Text>
 
             {/* 구분선 */}
@@ -321,41 +343,45 @@ const App = memo(() => {
             {/* 부가 정보 - 토스처럼 작게 */}
             <View style={styles.subInfo}>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {(timeLeft.years * 365 + timeLeft.months * 30 + timeLeft.days).toLocaleString()}일
+                {(() => {
+                  if (!birthDate || !lifeExpectancy) return '0일';
+                  const birth = new Date(birthDate + 'T00:00:00');
+                  const expectedDeath = new Date(birth);
+                  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
+                  const now = new Date();
+                  const totalDays = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+                  return totalDays > 0 ? totalDays.toLocaleString() + t('days') : '0' + t('days');
+                })()}
               </Text>
               <Text style={[styles.subInfoDot, { color: currentTheme.placeholder }]}>•</Text>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {((timeLeft.years * 365 + timeLeft.months * 30 + timeLeft.days) * 24 + timeLeft.hours).toLocaleString()}시간
+                {(() => {
+                  if (!birthDate || !lifeExpectancy) return '0시간';
+                  const birth = new Date(birthDate + 'T00:00:00');
+                  const expectedDeath = new Date(birth);
+                  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
+                  const now = new Date();
+                  const totalHours = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60));
+                  return totalHours > 0 ? totalHours.toLocaleString() + t('hours') : '0' + t('hours');
+                })()}
               </Text>
             </View>
 
             {/* 실시간 업데이트 표시 */}
             <View style={styles.liveIndicator}>
-              <View style={[styles.liveDot, { backgroundColor: currentTheme.primary }]} />
+              <Animated.View
+                style={[
+                  styles.liveDot,
+                  {
+                    backgroundColor: currentTheme.primary,
+                    opacity: pulseAnim,
+                  },
+                ]}
+              />
               <Text style={[styles.liveText, { color: currentTheme.secondaryText }]}>
                 {timeLeft.hours.toString().padStart(2, '0')}:
                 {timeLeft.minutes.toString().padStart(2, '0')}:
                 {timeLeft.seconds.toString().padStart(2, '0')}
-              </Text>
-            </View>
-          </View>
-
-          {/* 부가 카드 - 통계 (미래 기능 대비) */}
-          <View style={[styles.statsCard, { backgroundColor: currentTheme.cardBackground }]}>
-            <View style={styles.statRow}>
-              <Text style={[styles.statLabel, { color: currentTheme.secondaryText }]}>
-                생년월일
-              </Text>
-              <Text style={[styles.statValue, { color: currentTheme.text }]}>
-                {birthDate}
-              </Text>
-            </View>
-            <View style={styles.statRow}>
-              <Text style={[styles.statLabel, { color: currentTheme.secondaryText }]}>
-                기대수명
-              </Text>
-              <Text style={[styles.statValue, { color: currentTheme.text }]}>
-                {lifeExpectancy}세
               </Text>
             </View>
           </View>
@@ -531,32 +557,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
-  },
-  // 통계 카드
-  statsCard: {
-    marginHorizontal: 24,
-    marginTop: 12,
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  statRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  statLabel: {
-    fontSize: 15,
-    fontWeight: '400',
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '600',
   },
   // 모달
   modalOverlay: {

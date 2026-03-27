@@ -218,5 +218,12 @@
   "settingsNicknameUpdateError": "Failed to update nickname.",
   "settingsBirthDate": "Birth Date",
   "settingsNotSet": "Not set",
-  "save": "Save"
+  "save": "Save",
+  "settingsLifeExpectancy": "Life Expectancy",
+  "timeRemaining": "Time Remaining",
+  "headerGreeting": "Hello, {{name}}",
+  "statsBirthDate": "Birth Date",
+  "statsLifeExpectancy": "Life Expectancy",
+  "onboardingLifeExpectancyHint": "Average life expectancy: 80 years",
+  "settingsSaved": "Settings saved successfully"
 }

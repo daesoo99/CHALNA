@@ -218,5 +218,12 @@
   "settingsNicknameUpdateError": "ニックネームの更新に失敗しました。",
   "settingsBirthDate": "生年月日",
   "settingsNotSet": "未設定",
-  "save": "保存"
+  "save": "保存",
+  "settingsLifeExpectancy": "予想寿命",
+  "timeRemaining": "残り時間",
+  "headerGreeting": "{{name}}さん",
+  "statsBirthDate": "生年月日",
+  "statsLifeExpectancy": "予想寿命",
+  "onboardingLifeExpectancyHint": "平均寿命: 80歳",
+  "settingsSaved": "設定が保存されました"
 }

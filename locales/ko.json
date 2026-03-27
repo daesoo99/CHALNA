@@ -218,5 +218,12 @@
   "settingsNicknameUpdateError": "닉네임 업데이트 중 오류가 발생했습니다.",
   "settingsBirthDate": "생년월일",
   "settingsNotSet": "설정 안됨",
-  "save": "저장"
+  "save": "저장",
+  "settingsLifeExpectancy": "기대수명",
+  "timeRemaining": "남은 시간",
+  "headerGreeting": "{{name}}님",
+  "statsBirthDate": "생년월일",
+  "statsLifeExpectancy": "기대수명",
+  "onboardingLifeExpectancyHint": "평균 기대수명: 80세",
+  "settingsSaved": "설정이 저장되었습니다"
 }
