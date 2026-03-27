@@ -20,34 +20,12 @@ import SecurityAuditor from './SecurityAuditor';
 import Onboarding from './Onboarding';
 import NotificationService from './NotificationService';
 import Settings from './Settings';
-import HourglassIcon from './components/HourglassIcon';
 import './i18n';
-
-// TimeCard 컴포넌트: 시간 표시 카드
-interface TimeCardProps {
-  value: number;
-  label: string;
-  color: string;
-  backgroundColor: string;
-  borderColor: string;
-}
-
-const TimeCard = memo<TimeCardProps>(({ value, label, color, backgroundColor, borderColor }) => (
-  <View
-    style={[styles.timeCard, { backgroundColor, borderColor }]}
-    accessibilityLabel={`${value} ${label}`}
-  >
-    <Text style={[styles.timeValue, { color }]}>{value}</Text>
-    <Text style={[styles.timeLabel, { color: '#888' }]}>{label}</Text>
-  </View>
-));
-
-TimeCard.displayName = 'TimeCard';
 
 const App = memo(() => {
   const { t, i18n } = useTranslation();
 
-  // 핵심 상태만 유지
+  // 핵심 상태
   const [nickname, setNickname] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [lifeExpectancy, setLifeExpectancy] = useState('80');
@@ -74,12 +52,11 @@ const App = memo(() => {
     { code: 'zh', name: '中文' },
   ];
 
-  // 단순화된 시간 계산
+  // 시간 계산
   const calculateTimeLeft = useCallback(() => {
     if (!birthDate || !lifeExpectancy) return;
 
     try {
-      // 기본 검증
       const security = SecurityAuditor.getInstance();
       const birthValidation = security.validateBirthDate(birthDate);
       const lifeValidation = security.validateLifeExpectancy(parseInt(lifeExpectancy, 10));
@@ -88,7 +65,6 @@ const App = memo(() => {
         return;
       }
 
-      // 시간 계산 (단순화)
       const birth = new Date(birthDate + 'T00:00:00');
       const expectedDeath = new Date(birth);
       expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
@@ -101,7 +77,6 @@ const App = memo(() => {
         return;
       }
 
-      // 년/월/일/시/분/초 계산
       let years = expectedDeath.getFullYear() - now.getFullYear();
       let months = expectedDeath.getMonth() - now.getMonth();
 
@@ -172,13 +147,11 @@ const App = memo(() => {
     }
   };
 
-  // 초기 로드
   useEffect(() => {
     loadSavedData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 타이머 실행
   useEffect(() => {
     if (!isActive || !birthDate) return;
 
@@ -222,7 +195,6 @@ const App = memo(() => {
       storageManager.set('onboardingComplete', 'true'),
     ]);
 
-    // 알림 서비스 시작
     try {
       await NotificationService.requestPermissions();
       NotificationService.startNotificationService(data.birthDate, parseInt(data.lifeExpectancy, 10));
@@ -296,6 +268,7 @@ const App = memo(() => {
     );
   }
 
+  // 토스 스타일 메인 화면
   return (
     <ErrorBoundary>
       <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
@@ -304,121 +277,88 @@ const App = memo(() => {
           backgroundColor={currentTheme.background}
         />
 
-        {/* 헤더 */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setShowLanguageModal(true)}
-            style={styles.iconButton}
-            accessibilityLabel={t('selectLanguage')}
-          >
-            <Text style={[styles.icon, { color: currentTheme.text }]}>🌐</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={handleThemeToggle}
-            style={styles.iconButton}
-            accessibilityLabel={t('toggleTheme')}
-          >
-            <Text style={styles.icon}>{isDarkTheme ? '☀️' : '🌙'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setShowSettingsModal(true)}
-            style={styles.iconButton}
-            accessibilityLabel={t('settings')}
-          >
-            <Text style={[styles.icon, { color: currentTheme.text }]}>⚙️</Text>
-          </TouchableOpacity>
-        </View>
-
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* 타이틀 */}
-          <View style={styles.titleContainer}>
-            <HourglassIcon color={currentTheme.accent} size={48} />
-            <Text style={[styles.title, { color: currentTheme.text }]}>
-              {t('title')}
-            </Text>
-            <Text style={[styles.subtitle, { color: currentTheme.secondaryText }]}>
-              {t('subtitle')}
-            </Text>
-          </View>
-
-          {/* 닉네임 */}
-          {nickname && (
-            <Text style={[styles.greeting, { color: currentTheme.text }]}>
-              {t('greeting', { name: nickname })}
-            </Text>
-          )}
-
-          {/* 타이머 */}
-          <View style={styles.timerContainer}>
-            <View style={styles.timeRow}>
-              <TimeCard
-                value={timeLeft.years}
-                label={t('years')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.accent}
-              />
-              <TimeCard
-                value={timeLeft.months}
-                label={t('months')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.accent}
-              />
-              <TimeCard
-                value={timeLeft.days}
-                label={t('days')}
-                color={currentTheme.accent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.accent}
-              />
+          {/* 헤더 - 토스 스타일 */}
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <Text style={[styles.nicknameText, { color: currentTheme.text }]}>
+                {nickname}님
+              </Text>
             </View>
-
-            <View style={styles.timeRow}>
-              <TimeCard
-                value={timeLeft.hours}
-                label={t('hours')}
-                color={currentTheme.secondaryAccent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.secondaryAccent}
-              />
-              <TimeCard
-                value={timeLeft.minutes}
-                label={t('minutes')}
-                color={currentTheme.secondaryAccent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.secondaryAccent}
-              />
-              <TimeCard
-                value={timeLeft.seconds}
-                label={t('seconds')}
-                color={currentTheme.secondaryAccent}
-                backgroundColor={currentTheme.cardBackground}
-                borderColor={currentTheme.secondaryAccent}
-              />
+            <View style={styles.headerRight}>
+              <TouchableOpacity
+                onPress={() => setShowSettingsModal(true)}
+                style={styles.headerIcon}
+              >
+                <Text style={styles.iconText}>⚙️</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowLanguageModal(true)}
+                style={styles.headerIcon}
+              >
+                <Text style={styles.iconText}>🌐</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* 일시정지/시작 버튼 */}
-          <TouchableOpacity
-            style={[
-              styles.controlButton,
-              {
-                backgroundColor: isActive ? currentTheme.error : currentTheme.success,
-              },
-            ]}
-            onPress={() => setIsActive(!isActive)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.controlButtonText}>
-              {isActive ? t('pause') : t('resume')}
+          {/* 메인 카드 - 토스 스타일 큰 카드 */}
+          <View style={[styles.mainCard, { backgroundColor: currentTheme.cardBackground }]}>
+            <Text style={[styles.cardTitle, { color: currentTheme.secondaryText }]}>
+              남은 시간
             </Text>
-          </TouchableOpacity>
+
+            {/* 핵심 숫자 - 토스처럼 크게 */}
+            <Text style={[styles.mainNumber, { color: currentTheme.text }]}>
+              {timeLeft.years}년 {timeLeft.months}개월 {timeLeft.days}일
+            </Text>
+
+            {/* 구분선 */}
+            <View style={[styles.divider, { backgroundColor: currentTheme.border }]} />
+
+            {/* 부가 정보 - 토스처럼 작게 */}
+            <View style={styles.subInfo}>
+              <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
+                {(timeLeft.years * 365 + timeLeft.months * 30 + timeLeft.days).toLocaleString()}일
+              </Text>
+              <Text style={[styles.subInfoDot, { color: currentTheme.placeholder }]}>•</Text>
+              <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
+                {((timeLeft.years * 365 + timeLeft.months * 30 + timeLeft.days) * 24 + timeLeft.hours).toLocaleString()}시간
+              </Text>
+            </View>
+
+            {/* 실시간 업데이트 표시 */}
+            <View style={styles.liveIndicator}>
+              <View style={[styles.liveDot, { backgroundColor: currentTheme.primary }]} />
+              <Text style={[styles.liveText, { color: currentTheme.secondaryText }]}>
+                {timeLeft.hours.toString().padStart(2, '0')}:
+                {timeLeft.minutes.toString().padStart(2, '0')}:
+                {timeLeft.seconds.toString().padStart(2, '0')}
+              </Text>
+            </View>
+          </View>
+
+          {/* 부가 카드 - 통계 (미래 기능 대비) */}
+          <View style={[styles.statsCard, { backgroundColor: currentTheme.cardBackground }]}>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: currentTheme.secondaryText }]}>
+                생년월일
+              </Text>
+              <Text style={[styles.statValue, { color: currentTheme.text }]}>
+                {birthDate}
+              </Text>
+            </View>
+            <View style={styles.statRow}>
+              <Text style={[styles.statLabel, { color: currentTheme.secondaryText }]}>
+                기대수명
+              </Text>
+              <Text style={[styles.statValue, { color: currentTheme.text }]}>
+                {lifeExpectancy}세
+              </Text>
+            </View>
+          </View>
         </ScrollView>
 
         {/* 언어 선택 모달 */}
@@ -504,76 +444,121 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? spacing.xl + 20 : spacing.xl,
-    paddingBottom: spacing.md,
-  },
-  iconButton: {
-    padding: spacing.sm,
-    marginLeft: spacing.md,
-  },
-  icon: {
-    fontSize: 24,
-  },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+    paddingBottom: 40,
   },
-  titleContainer: {
-    alignItems: 'center',
-    marginBottom: spacing.xl,
-  },
-  title: {
-    ...typography.title,
-    marginTop: spacing.md,
-  },
-  subtitle: {
-    ...typography.subtitle,
-    marginTop: spacing.xs,
-  },
-  greeting: {
-    ...typography.body,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  timerContainer: {
-    marginBottom: spacing.xl,
-  },
-  timeRow: {
+  // 헤더 - 토스 스타일
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 16,
   },
-  timeCard: {
-    flex: 1,
-    borderRadius: 12,
-    borderWidth: 2,
-    padding: spacing.md,
-    marginHorizontal: spacing.xs,
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  timeValue: {
-    ...typography.number,
-    marginBottom: spacing.xs,
+  nicknameText: {
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.3,
   },
-  timeLabel: {
-    ...typography.caption,
+  headerRight: {
+    flexDirection: 'row',
+    gap: 8,
   },
-  controlButton: {
-    borderRadius: 25,
-    padding: spacing.lg,
+  headerIcon: {
+    padding: 8,
+  },
+  iconText: {
+    fontSize: 22,
+  },
+  // 메인 카드 - 토스 스타일
+  mainCard: {
+    marginHorizontal: 24,
+    marginTop: 8,
+    borderRadius: 16,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 16,
+    letterSpacing: -0.2,
+  },
+  mainNumber: {
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -1,
+    marginBottom: 20,
+  },
+  divider: {
+    height: 1,
+    marginVertical: 16,
+  },
+  subInfo: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.md,
+    gap: 8,
   },
-  controlButtonText: {
-    ...typography.button,
-    color: '#FFFFFF',
+  subInfoText: {
+    fontSize: 14,
+    fontWeight: '400',
   },
+  subInfoDot: {
+    fontSize: 12,
+  },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 8,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  liveText: {
+    fontSize: 13,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  // 통계 카드
+  statsCard: {
+    marginHorizontal: 24,
+    marginTop: 12,
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  statLabel: {
+    fontSize: 15,
+    fontWeight: '400',
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  // 모달
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -584,20 +569,22 @@ const styles = StyleSheet.create({
     width: '80%',
     maxHeight: '70%',
     borderRadius: 20,
-    padding: spacing.lg,
+    padding: 24,
   },
   modalTitle: {
-    ...typography.subtitle,
-    marginBottom: spacing.md,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
     textAlign: 'center',
   },
   languageItem: {
-    padding: spacing.md,
+    padding: 16,
     borderRadius: 8,
-    marginVertical: spacing.xs,
+    marginVertical: 4,
   },
   languageText: {
-    ...typography.body,
+    fontSize: 16,
+    fontWeight: '500',
     textAlign: 'center',
   },
 });
