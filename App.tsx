@@ -11,7 +11,6 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
-  KeyboardAvoidingView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
@@ -176,6 +175,7 @@ const App = memo(() => {
   // 초기 로드
   useEffect(() => {
     loadSavedData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 타이머 실행

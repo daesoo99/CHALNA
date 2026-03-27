@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo } from 'react';
+import React, { useState, memo } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
-  Linking,
   Alert,
   Platform,
   StyleSheet,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
-import { storageManager } from './StorageManager';
+import { darkTheme, lightTheme, typography, spacing } from './themes';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface SettingsProps {
@@ -25,9 +23,50 @@ interface SettingsProps {
   onClose: () => void;
   onUpdate: (data: { nickname: string; birthDate: string; lifeExpectancy: string }) => void;
   onThemeToggle: () => void;
-  onLanguageChange: (code: string) => void;
+  onLanguageChange: (_code: string) => void;
   onReset: () => void;
 }
+
+// Section Header Component (outside to avoid recreating on each render)
+const SectionHeader = memo<{ title: string; color: string; accentColor: string }>(
+  ({ title, color, accentColor }) => (
+    <View style={[styles.sectionHeader, { borderBottomColor: accentColor }]}>
+      <Text style={[styles.sectionHeaderText, { color }]}>{title}</Text>
+    </View>
+  )
+);
+
+SectionHeader.displayName = 'SectionHeader';
+
+// Setting Item Component (outside to avoid recreating on each render)
+const SettingItem = memo<{
+  label: string;
+  value?: string;
+  onPress?: () => void;
+  rightElement?: React.ReactNode;
+  showBorder?: boolean;
+  theme: { cardBackground: string; text: string; secondaryText: string; border: string };
+}>(({ label, value, onPress, rightElement, showBorder = true, theme }) => (
+  <TouchableOpacity
+    style={[
+      styles.settingItem,
+      { backgroundColor: theme.cardBackground },
+      showBorder && styles.settingItemBorder,
+      showBorder && { borderBottomColor: theme.border },
+    ]}
+    onPress={onPress}
+    activeOpacity={onPress ? 0.7 : 1}
+    disabled={!onPress}
+  >
+    <Text style={[styles.settingLabel, { color: theme.text }]}>{label}</Text>
+    {value && (
+      <Text style={[styles.settingValue, { color: theme.secondaryText }]}>{value}</Text>
+    )}
+    {rightElement}
+  </TouchableOpacity>
+));
+
+SettingItem.displayName = 'SettingItem';
 
 const Settings = memo<SettingsProps>(({
   nickname: initialNickname,
@@ -50,49 +89,6 @@ const Settings = memo<SettingsProps>(({
   const [lifeExpectancy, setLifeExpectancy] = useState(initialLifeExpectancy);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-
-  // Section Header Component
-  const SectionHeader = ({ title }: { title: string }) => (
-    <View style={[styles.sectionHeader, { borderBottomColor: currentTheme.accent }]}>
-      <Text style={[styles.sectionHeaderText, { color: currentTheme.text }]}>
-        {title}
-      </Text>
-    </View>
-  );
-
-  // Setting Item Component
-  const SettingItem = ({
-    label,
-    value,
-    onPress,
-    rightElement,
-    showBorder = true,
-  }: {
-    label: string;
-    value?: string;
-    onPress?: () => void;
-    rightElement?: React.ReactNode;
-    showBorder?: boolean;
-  }) => (
-    <TouchableOpacity
-      style={[
-        styles.settingItem,
-        { backgroundColor: currentTheme.cardBackground },
-        showBorder && { borderBottomWidth: 1, borderBottomColor: currentTheme.border },
-      ]}
-      onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress}
-    >
-      <Text style={[styles.settingLabel, { color: currentTheme.text }]}>{label}</Text>
-      {value && (
-        <Text style={[styles.settingValue, { color: currentTheme.secondaryText }]}>
-          {value}
-        </Text>
-      )}
-      {rightElement}
-    </TouchableOpacity>
-  );
 
   // Handlers
   const handleSave = () => {
@@ -165,7 +161,11 @@ const Settings = memo<SettingsProps>(({
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* 섹션 1: 나의 정보 */}
-        <SectionHeader title={t('settingsPersonalInfo')} />
+        <SectionHeader
+          title={t('settingsPersonalInfo')}
+          color={currentTheme.text}
+          accentColor={currentTheme.accent}
+        />
         <View style={styles.section}>
           <View style={[styles.inputItem, { backgroundColor: currentTheme.cardBackground }]}>
             <Text style={[styles.inputLabel, { color: currentTheme.secondaryText }]}>
@@ -187,6 +187,7 @@ const Settings = memo<SettingsProps>(({
             label={t('settingsBirthDate')}
             value={birthDate}
             onPress={() => setShowDatePicker(true)}
+            theme={currentTheme}
           />
 
           <View style={[styles.inputItem, { backgroundColor: currentTheme.cardBackground }]}>
@@ -208,11 +209,16 @@ const Settings = memo<SettingsProps>(({
         </View>
 
         {/* 섹션 2: 표시 설정 */}
-        <SectionHeader title={t('settingsDisplay')} />
+        <SectionHeader
+          title={t('settingsDisplay')}
+          color={currentTheme.text}
+          accentColor={currentTheme.accent}
+        />
         <View style={styles.section}>
           <SettingItem
             label={t('settingsThemeDark')}
             onPress={onThemeToggle}
+            theme={currentTheme}
             rightElement={
               <Switch
                 value={isDarkTheme}
@@ -227,21 +233,28 @@ const Settings = memo<SettingsProps>(({
             label={t('settingsLanguage')}
             value={currentLanguage.toUpperCase()}
             showBorder={false}
+            theme={currentTheme}
           />
         </View>
 
         {/* 섹션 3: 데이터 */}
-        <SectionHeader title={t('settingsData')} />
+        <SectionHeader
+          title={t('settingsData')}
+          color={currentTheme.text}
+          accentColor={currentTheme.accent}
+        />
         <View style={styles.section}>
           <SettingItem
             label={t('settingsDataDelete')}
             onPress={handleDeleteAllData}
+            theme={currentTheme}
           />
 
           <SettingItem
             label={t('settingsVersion')}
             value="1.0.0"
             showBorder={false}
+            theme={currentTheme}
           />
         </View>
 
@@ -321,6 +334,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
+  },
+  settingItemBorder: {
+    borderBottomWidth: 1,
   },
   settingLabel: {
     ...typography.body,
