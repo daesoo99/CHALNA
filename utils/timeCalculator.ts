@@ -13,6 +13,26 @@ export interface TimeLeft {
 }
 
 /**
+ * Helper: Calculate expected death date
+ * @param birthDate - Birth date in YYYY-MM-DD format
+ * @param lifeExpectancy - Expected life span in years (string)
+ * @returns Date object representing expected death
+ */
+function getExpectedDeathDate(birthDate: string, lifeExpectancy: string): Date {
+  const birth = new Date(birthDate + 'T00:00:00');
+  const lifeYears = parseInt(lifeExpectancy, 10);
+
+  // NaN 검증
+  if (Number.isNaN(lifeYears) || lifeYears < 1 || lifeYears > 150) {
+    throw new Error('Invalid life expectancy');
+  }
+
+  const expectedDeath = new Date(birth);
+  expectedDeath.setFullYear(birth.getFullYear() + lifeYears);
+  return expectedDeath;
+}
+
+/**
  * Calculate remaining time until expected death
  * @param birthDate - Birth date in YYYY-MM-DD format
  * @param lifeExpectancy - Expected life span in years
@@ -22,10 +42,7 @@ export function calculateTimeLeft(
   birthDate: string,
   lifeExpectancy: string
 ): TimeLeft {
-  const birth = new Date(birthDate + 'T00:00:00');
-  const expectedDeath = new Date(birth);
-  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
-
+  const expectedDeath = getExpectedDeathDate(birthDate, lifeExpectancy);
   const now = new Date();
   const difference = expectedDeath.getTime() - now.getTime();
 
@@ -79,9 +96,7 @@ export function calculateTotalDays(
   birthDate: string,
   lifeExpectancy: string
 ): number {
-  const birth = new Date(birthDate + 'T00:00:00');
-  const expectedDeath = new Date(birth);
-  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
+  const expectedDeath = getExpectedDeathDate(birthDate, lifeExpectancy);
   const now = new Date();
   const totalDays = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   return Math.max(0, totalDays);
@@ -97,9 +112,7 @@ export function calculateTotalHours(
   birthDate: string,
   lifeExpectancy: string
 ): number {
-  const birth = new Date(birthDate + 'T00:00:00');
-  const expectedDeath = new Date(birth);
-  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
+  const expectedDeath = getExpectedDeathDate(birthDate, lifeExpectancy);
   const now = new Date();
   const totalHours = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60));
   return Math.max(0, totalHours);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, memo, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -48,6 +48,17 @@ const App = memo(() => {
 
   // Live dot 펄스 애니메이션
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // 성능 최적화: 비용이 큰 계산 메모이제이션
+  const totalDays = useMemo(() => {
+    if (!birthDate || !lifeExpectancy) return 0;
+    return calculateTotalDays(birthDate, lifeExpectancy);
+  }, [birthDate, lifeExpectancy]);
+
+  const totalHours = useMemo(() => {
+    if (!birthDate || !lifeExpectancy) return 0;
+    return calculateTotalHours(birthDate, lifeExpectancy);
+  }, [birthDate, lifeExpectancy]);
 
   const languages = [
     { code: 'ko', name: t('languageKorean') },
@@ -264,7 +275,7 @@ const App = memo(() => {
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={[styles.nicknameText, { color: currentTheme.text }]}>
-                {t('headerGreeting', { name: nickname })}
+                {t('headerGreeting', { name: nickname || t('yourTime') })}
               </Text>
             </View>
             <View style={styles.headerRight}>
@@ -291,7 +302,7 @@ const App = memo(() => {
 
             {/* 핵심 숫자 - 토스처럼 크게 */}
             <Text style={[styles.mainNumber, { color: currentTheme.text }]}>
-              {timeLeft.years}{t('years')} {timeLeft.months}{t('months')} {timeLeft.days}{t('days')}
+              {timeLeft.years} {t('years')} {timeLeft.months} {t('months')} {timeLeft.days} {t('days')}
             </Text>
 
             {/* 구분선 */}
@@ -300,15 +311,11 @@ const App = memo(() => {
             {/* 부가 정보 - 토스처럼 작게 */}
             <View style={styles.subInfo}>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {birthDate && lifeExpectancy
-                  ? calculateTotalDays(birthDate, lifeExpectancy).toLocaleString() + t('days')
-                  : '0' + t('days')}
+                {totalDays.toLocaleString()} {t('days')}
               </Text>
               <Text style={[styles.subInfoDot, { color: currentTheme.placeholder }]}>•</Text>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {birthDate && lifeExpectancy
-                  ? calculateTotalHours(birthDate, lifeExpectancy).toLocaleString() + t('hours')
-                  : '0' + t('hours')}
+                {totalHours.toLocaleString()} {t('hours')}
               </Text>
             </View>
 
