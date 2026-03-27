@@ -9,9 +9,12 @@ import {
   Alert,
   Platform,
   StyleSheet,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { darkTheme, lightTheme, typography, spacing } from './themes';
+import { darkTheme, lightTheme, typography, spacing } from '../themes';
+import { MIN_LIFE_EXPECTANCY, MAX_LIFE_EXPECTANCY, DEFAULT_LIFE_EXPECTANCY, APP_VERSION } from '../constants';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface SettingsProps {
@@ -88,10 +91,11 @@ const Settings = memo<SettingsProps>(({
   const [birthDate, setBirthDate] = useState(initialBirthDate);
   const [lifeExpectancy, setLifeExpectancy] = useState(initialLifeExpectancy);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
 
   // Handlers
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!nickname.trim()) {
       Alert.alert(t('errorTitle'), t('nicknameRequired'));
       return;
@@ -103,14 +107,18 @@ const Settings = memo<SettingsProps>(({
     }
 
     const age = parseInt(lifeExpectancy, 10);
-    if (isNaN(age) || age < 1 || age > 150) {
+    if (isNaN(age) || age < MIN_LIFE_EXPECTANCY || age > MAX_LIFE_EXPECTANCY) {
       Alert.alert(t('errorTitle'), t('lifeExpectancyInvalid'));
       return;
     }
 
-    onUpdate({ nickname, birthDate, lifeExpectancy });
-    setIsEditing(false);
-    Alert.alert(t('success'), t('settingsSaved'));
+    try {
+      await onUpdate({ nickname, birthDate, lifeExpectancy });
+      setIsEditing(false);
+      Alert.alert(t('success'), t('settingsSaved'));
+    } catch (error) {
+      Alert.alert(t('errorTitle'), t('appInitError'));
+    }
   };
 
   const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -120,6 +128,11 @@ const Settings = memo<SettingsProps>(({
       setBirthDate(formattedDate);
       setIsEditing(true);
     }
+  };
+
+  const handleLanguageSelect = async (languageCode: string) => {
+    await onLanguageChange(languageCode);
+    setShowLanguageModal(false);
   };
 
   const handleDeleteAllData = () => {
@@ -136,6 +149,13 @@ const Settings = memo<SettingsProps>(({
       ]
     );
   };
+
+  const languages = [
+    { code: 'ko', name: t('languageKorean') },
+    { code: 'en', name: 'English' },
+    { code: 'ja', name: '日本語' },
+    { code: 'zh', name: '中文' },
+  ];
 
   return (
     <View style={[styles.container, { backgroundColor: currentTheme.background }]}>
@@ -216,7 +236,7 @@ const Settings = memo<SettingsProps>(({
                 setIsEditing(true);
               }}
               keyboardType="number-pad"
-              placeholder="80"
+              placeholder={DEFAULT_LIFE_EXPECTANCY.toString()}
               placeholderTextColor={currentTheme.secondaryText}
             />
           </View>
@@ -246,6 +266,7 @@ const Settings = memo<SettingsProps>(({
           <SettingItem
             label={t('settingsLanguage')}
             value={currentLanguage.toUpperCase()}
+            onPress={() => setShowLanguageModal(true)}
             showBorder={false}
             theme={currentTheme}
           />
@@ -266,7 +287,7 @@ const Settings = memo<SettingsProps>(({
 
           <SettingItem
             label={t('settingsVersion')}
-            value="1.0.0"
+            value={APP_VERSION}
             showBorder={false}
             theme={currentTheme}
           />
@@ -279,13 +300,66 @@ const Settings = memo<SettingsProps>(({
       {/* Date Picker */}
       {showDatePicker && (
         <DateTimePicker
-          value={birthDate ? new Date(birthDate) : new Date()}
+          value={birthDate ? new Date(birthDate) : new Date(2000, 0, 1)}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
           onChange={handleDateChange}
           maximumDate={new Date()}
         />
       )}
+
+      {/* Language Modal */}
+      <Modal
+        visible={showLanguageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLanguageModal(false)}
+        >
+          <View
+            style={[styles.modalContent, { backgroundColor: currentTheme.cardBackground }]}
+            onStartShouldSetResponder={() => true}
+          >
+            <Text style={[styles.modalTitle, { color: currentTheme.text }]}>
+              {t('selectLanguage')}
+            </Text>
+            <FlatList
+              data={languages}
+              keyExtractor={(item) => item.code}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[
+                    styles.languageItem,
+                    currentLanguage === item.code && {
+                      backgroundColor: currentTheme.accent + '20',
+                    },
+                  ]}
+                  onPress={() => handleLanguageSelect(item.code)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.languageText,
+                      {
+                        color:
+                          currentLanguage === item.code
+                            ? currentTheme.accent
+                            : currentTheme.text,
+                      },
+                    ]}
+                  >
+                    {item.name}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 });
@@ -371,6 +445,34 @@ const styles = StyleSheet.create({
   input: {
     ...typography.body,
     paddingVertical: spacing.xs,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    maxHeight: '70%',
+    borderRadius: 20,
+    padding: spacing.lg,
+  },
+  modalTitle: {
+    ...typography.title,
+    fontSize: 18,
+    marginBottom: spacing.md,
+    textAlign: 'center',
+  },
+  languageItem: {
+    padding: spacing.md,
+    borderRadius: 8,
+    marginVertical: spacing.xs,
+  },
+  languageText: {
+    ...typography.body,
+    fontWeight: typography.weight.medium,
+    textAlign: 'center',
   },
 });
 

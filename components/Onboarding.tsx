@@ -12,7 +12,8 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Theme } from './themes';
+import { Theme } from '../themes';
+import { DEFAULT_LIFE_EXPECTANCY, MIN_LIFE_EXPECTANCY, MAX_LIFE_EXPECTANCY } from '../constants';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface OnboardingProps {
@@ -27,7 +28,7 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, theme }) => {
   // 사용자 입력 상태
   const [nickname, setNickname] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [lifeExpectancy, setLifeExpectancy] = useState('80');
+  const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULT_LIFE_EXPECTANCY.toString());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date(2000, 0, 1));
 
@@ -44,12 +45,14 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, theme }) => {
   }, []);
 
   const canStart = useCallback(() => {
+    const age = parseInt(lifeExpectancy, 10);
     return (
       nickname.trim().length > 0 &&
       birthDate.length > 0 &&
       lifeExpectancy.length > 0 &&
-      parseInt(lifeExpectancy) >= 1 &&
-      parseInt(lifeExpectancy) <= 150
+      !isNaN(age) &&
+      age >= MIN_LIFE_EXPECTANCY &&
+      age <= MAX_LIFE_EXPECTANCY
     );
   }, [nickname, birthDate, lifeExpectancy]);
 

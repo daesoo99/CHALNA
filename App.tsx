@@ -20,11 +20,12 @@ import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
 import ErrorBoundary from './ErrorBoundary';
 import { storageManager } from './StorageManager';
 import SecurityAuditor from './SecurityAuditor';
-import Onboarding from './Onboarding';
+import Onboarding from './components/Onboarding';
 import NotificationService from './NotificationService';
-import Settings from './Settings';
+import Settings from './components/Settings';
 import { calculateTimeLeft, calculateTotalDays, calculateTotalHours } from './utils/timeCalculator';
 import TimeDisplay from './components/TimeDisplay';
+import { DEFAULT_LIFE_EXPECTANCY } from './constants';
 import './i18n';
 
 const App = memo(() => {
@@ -33,7 +34,7 @@ const App = memo(() => {
   // 핵심 상태
   const [nickname, setNickname] = useState('');
   const [birthDate, setBirthDate] = useState('');
-  const [lifeExpectancy, setLifeExpectancy] = useState('80');
+  const [lifeExpectancy, setLifeExpectancy] = useState(DEFAULT_LIFE_EXPECTANCY.toString());
   const [timeLeft, setTimeLeft] = useState({
     years: 0,
     months: 0,
@@ -109,11 +110,11 @@ const App = memo(() => {
       if (savedLifeExpectancy) setLifeExpectancy(savedLifeExpectancy);
       if (savedLanguage) i18n.changeLanguage(savedLanguage);
       if (savedTheme !== null) {
-        const isDark = savedTheme === 'true';
+        const isDark = savedTheme === 'true' || savedTheme === true;
         setIsDarkTheme(isDark);
         setCurrentTheme(isDark ? darkTheme : lightTheme);
       }
-      if (savedOnboarding === 'true') setOnboardingComplete(true);
+      if (savedOnboarding === 'true' || savedOnboarding === true) setOnboardingComplete(true);
 
       setIsLoading(false);
     } catch (error) {
@@ -258,7 +259,11 @@ const App = memo(() => {
             setOnboardingComplete(false);
             setNickname('');
             setBirthDate('');
-            setLifeExpectancy('80');
+            setLifeExpectancy(DEFAULT_LIFE_EXPECTANCY.toString());
+            // 테마와 언어도 초기화
+            setIsDarkTheme(true);
+            setCurrentTheme(darkTheme);
+            await i18n.changeLanguage('ko');
           },
         },
       ]
