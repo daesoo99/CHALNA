@@ -20,7 +20,7 @@ class SharedPrefsModule(reactContext: ReactApplicationContext) : ReactContextBas
     @ReactMethod
     fun saveUserData(birthYear: Int, birthMonth: Int, birthDay: Int, desiredDeathAge: Int) {
         val sharedPref: SharedPreferences = reactApplicationContext.getSharedPreferences(
-            "DeathClockPrefs", Context.MODE_PRIVATE)
+            "ChalnaPrefs", Context.MODE_PRIVATE)
         with(sharedPref.edit()) {
             putInt("birthYear", birthYear)
             putInt("birthMonth", birthMonth)
@@ -38,12 +38,12 @@ class SharedPrefsModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     @ReactMethod
     fun startNotificationService() {
-        DeathClockNotificationService.start(reactApplicationContext)
+        ChalnaNotificationService.start(reactApplicationContext)
     }
 
     @ReactMethod
     fun stopNotificationService() {
-        DeathClockNotificationService.stop(reactApplicationContext)
+        ChalnaNotificationService.stop(reactApplicationContext)
     }
 
     @ReactMethod
@@ -73,10 +73,10 @@ class SharedPrefsModule(reactContext: ReactApplicationContext) : ReactContextBas
 
     private fun triggerWidgetUpdate() {
         val context = reactApplicationContext
-        val intent = android.content.Intent(context, DeathClockWidgetProvider::class.java)
+        val intent = android.content.Intent(context, ChalnaWidgetProvider::class.java)
         intent.action = android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE
         val ids = android.appwidget.AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(android.content.ComponentName(context, DeathClockWidgetProvider::class.java))
+            .getAppWidgetIds(android.content.ComponentName(context, ChalnaWidgetProvider::class.java))
         intent.putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids)
         context.sendBroadcast(intent)
     }

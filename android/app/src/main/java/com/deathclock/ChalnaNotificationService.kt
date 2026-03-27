@@ -9,10 +9,10 @@ import androidx.core.app.NotificationCompat
 import java.util.*
 import kotlin.math.max
 
-class DeathClockNotificationService : Service() {
+class ChalnaNotificationService : Service() {
 
     private val NOTIFICATION_ID = 1
-    private val CHANNEL_ID = "DeathClockChannel"
+    private val CHANNEL_ID = "ChalnaChannel"
     private var timer: Timer? = null
 
     override fun onCreate() {
@@ -52,7 +52,7 @@ class DeathClockNotificationService : Service() {
 
     private fun updateNotification() {
         try {
-            val prefs = getSharedPreferences("DeathClockPrefs", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("ChalnaPrefs", Context.MODE_PRIVATE)
             val birthYear = prefs.getInt("birthYear", 1990)
             val birthMonth = prefs.getInt("birthMonth", 1)
             val birthDay = prefs.getInt("birthDay", 1)
@@ -160,7 +160,7 @@ class DeathClockNotificationService : Service() {
             }
 
             // Check if we have valid data before starting timer
-            val prefs = getSharedPreferences("DeathClockPrefs", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("ChalnaPrefs", Context.MODE_PRIVATE)
             val birthYear = prefs.getInt("birthYear", 0)
 
             if (birthYear == 0) {
@@ -180,7 +180,7 @@ class DeathClockNotificationService : Service() {
 
     companion object {
         fun start(context: Context) {
-            val intent = Intent(context, DeathClockNotificationService::class.java)
+            val intent = Intent(context, ChalnaNotificationService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {
@@ -189,7 +189,7 @@ class DeathClockNotificationService : Service() {
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, DeathClockNotificationService::class.java)
+            val intent = Intent(context, ChalnaNotificationService::class.java)
             context.stopService(intent)
         }
     }

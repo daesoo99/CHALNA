@@ -13,7 +13,7 @@ interface AnalyticsData {
 }
 
 class Analytics {
-  private storageKey = 'death_clock_analytics';
+  private storageKey = 'chalna_analytics';
   private sessionStartTime: number | null = null;
 
   async initializeSession() {
