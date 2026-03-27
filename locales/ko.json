@@ -225,5 +225,8 @@
   "statsBirthDate": "생년월일",
   "statsLifeExpectancy": "기대수명",
   "onboardingLifeExpectancyHint": "평균 기대수명: 80세",
-  "settingsSaved": "설정이 저장되었습니다"
+  "settingsSaved": "설정이 저장되었습니다",
+  "nicknameRequired": "닉네임을 입력해주세요",
+  "birthDateRequired": "생년월일을 선택해주세요",
+  "lifeExpectancyInvalid": "유효한 기대수명을 입력해주세요 (1-150년)"
 }

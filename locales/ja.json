@@ -225,5 +225,8 @@
   "statsBirthDate": "生年月日",
   "statsLifeExpectancy": "予想寿命",
   "onboardingLifeExpectancyHint": "平均寿命: 80歳",
-  "settingsSaved": "設定が保存されました"
+  "settingsSaved": "設定が保存されました",
+  "nicknameRequired": "ニックネームを入力してください",
+  "birthDateRequired": "生年月日を選択してください",
+  "lifeExpectancyInvalid": "有効な予想寿命を入力してください（1-150年）"
 }

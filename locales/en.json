@@ -225,5 +225,8 @@
   "statsBirthDate": "Birth Date",
   "statsLifeExpectancy": "Life Expectancy",
   "onboardingLifeExpectancyHint": "Average life expectancy: 80 years",
-  "settingsSaved": "Settings saved successfully"
+  "settingsSaved": "Settings saved successfully",
+  "nicknameRequired": "Please enter a nickname",
+  "birthDateRequired": "Please select your birth date",
+  "lifeExpectancyInvalid": "Please enter a valid life expectancy (1-150 years)"
 }

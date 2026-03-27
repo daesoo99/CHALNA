@@ -225,5 +225,8 @@
   "statsBirthDate": "出生日期",
   "statsLifeExpectancy": "预期寿命",
   "onboardingLifeExpectancyHint": "平均预期寿命: 80岁",
-  "settingsSaved": "设置已保存"
+  "settingsSaved": "设置已保存",
+  "nicknameRequired": "请输入昵称",
+  "birthDateRequired": "请选择出生日期",
+  "lifeExpectancyInvalid": "请输入有效的预期寿命（1-150年）"
 }

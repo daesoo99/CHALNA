@@ -83,7 +83,8 @@ const App = memo(() => {
       const result = calculateTimeLeft(birthDate, lifeExpectancy);
       setTimeLeft(result);
     } catch (error) {
-      console.error('Time calculation error:', error);
+      // 에러 발생 시 초기화 (잘못된 데이터 처리)
+      setTimeLeft({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
     }
   }, [birthDate, lifeExpectancy]);
 
@@ -113,7 +114,7 @@ const App = memo(() => {
 
       setIsLoading(false);
     } catch (error) {
-      console.error('Failed to load data:', error);
+      // 로드 실패 시에도 앱 시작 (초기 상태로)
       setIsLoading(false);
     }
   };
@@ -190,7 +191,7 @@ const App = memo(() => {
       await NotificationService.requestPermissions();
       NotificationService.startNotificationService(data.birthDate, parseInt(data.lifeExpectancy, 10));
     } catch (error) {
-      console.error('Failed to start notification service:', error);
+      // 알림 권한 실패는 앱 사용에 영향 없음
     }
   };
 
@@ -302,7 +303,9 @@ const App = memo(() => {
 
             {/* 핵심 숫자 - 토스처럼 크게 */}
             <Text style={[styles.mainNumber, { color: currentTheme.text }]}>
-              {timeLeft.years} {t('years')} {timeLeft.months} {t('months')} {timeLeft.days} {t('days')}
+              {birthDate && lifeExpectancy
+                ? `${timeLeft.years} ${t('years')} ${timeLeft.months} ${t('months')} ${timeLeft.days} ${t('days')}`
+                : '--'}
             </Text>
 
             {/* 구분선 */}

@@ -36,8 +36,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('⏳ CHALNA Error:', error);
-    console.error('Error Info:', errorInfo);
+    if (__DEV__) {
+      console.error('⏳ CHALNA Error:', error);
+      console.error('Error Info:', errorInfo);
+    }
 
     this.setState({
       errorInfo: {
