@@ -21,9 +21,9 @@ interface SettingsProps {
   isDarkTheme: boolean;
   currentLanguage: string;
   onClose: () => void;
-  onUpdate: (data: { nickname: string; birthDate: string; lifeExpectancy: string }) => void;
-  onThemeToggle: () => void;
-  onLanguageChange: (_code: string) => void;
+  onUpdate: (data: { nickname: string; birthDate: string; lifeExpectancy: string }) => void | Promise<void>;
+  onThemeToggle: () => void | Promise<void>;
+  onLanguageChange: (_code: string) => void | Promise<void>;
   onReset: () => void;
 }
 

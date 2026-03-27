@@ -290,8 +290,7 @@ const App = memo(() => {
       <ErrorBoundary>
         <Onboarding
           onComplete={handleOnboardingComplete}
-          currentLanguage={i18n.language}
-          onLanguageChange={handleLanguageSelect}
+          theme={currentTheme}
         />
       </ErrorBoundary>
     );

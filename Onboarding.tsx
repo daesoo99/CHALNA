@@ -18,7 +18,7 @@ import { storageManager } from './StorageManager';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 
 interface OnboardingProps {
-  onComplete: () => void;
+  onComplete: (data: { nickname: string; birthDate: string; lifeExpectancy: string }) => void | Promise<void>;
   theme: Theme;
 }
 
@@ -47,21 +47,18 @@ const Onboarding: React.FC<OnboardingProps> = ({ onComplete, theme }) => {
   }, [slideAnim]);
 
   const handleNext = useCallback(async () => {
-    // 마지막 단계에서 데이터 저장 후 완료
+    // 마지막 단계에서 데이터 전달
     if (step === 5) {
-      // 데이터 저장
-      await storageManager.set('nickname', nickname);
-      await storageManager.set('birthDate', birthDate);
-      await storageManager.set('lifeExpectancy', lifeExpectancy);
-      onComplete();
+      await onComplete({ nickname, birthDate, lifeExpectancy });
     } else {
       animateToNextStep(step + 1);
     }
   }, [step, nickname, birthDate, lifeExpectancy, animateToNextStep, onComplete]);
 
-  const handleSkip = useCallback(() => {
-    onComplete();
-  }, [onComplete]);
+  const handleSkip = useCallback(async () => {
+    // Skip시에도 기본값으로 완료
+    await onComplete({ nickname: nickname || 'User', birthDate: birthDate || '2000-01-01', lifeExpectancy: lifeExpectancy || '80' });
+  }, [nickname, birthDate, lifeExpectancy, onComplete]);
 
   const handleDateChange = useCallback((event: DateTimePickerEvent | null, selectedDate?: Date) => {
     if (Platform.OS === 'android') {
