@@ -21,6 +21,7 @@ import SecurityAuditor from './SecurityAuditor';
 import Onboarding from './Onboarding';
 import NotificationService from './NotificationService';
 import Settings from './Settings';
+import { calculateTimeLeft, calculateTotalDays, calculateTotalHours } from './utils/timeCalculator';
 import './i18n';
 
 const App = memo(() => {
@@ -56,7 +57,7 @@ const App = memo(() => {
   ];
 
   // 시간 계산
-  const calculateTimeLeft = useCallback(() => {
+  const updateTimeLeft = useCallback(() => {
     if (!birthDate || !lifeExpectancy) return;
 
     try {
@@ -68,52 +69,8 @@ const App = memo(() => {
         return;
       }
 
-      const birth = new Date(birthDate + 'T00:00:00');
-      const expectedDeath = new Date(birth);
-      expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
-
-      const now = new Date();
-      const difference = expectedDeath.getTime() - now.getTime();
-
-      if (difference <= 0) {
-        setTimeLeft({ years: 0, months: 0, days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      let years = expectedDeath.getFullYear() - now.getFullYear();
-      let months = expectedDeath.getMonth() - now.getMonth();
-
-      if (months < 0) {
-        years--;
-        months += 12;
-      }
-
-      if (expectedDeath.getDate() < now.getDate()) {
-        months--;
-        if (months < 0) {
-          years--;
-          months += 12;
-        }
-      }
-
-      const tempDate = new Date(now);
-      tempDate.setFullYear(tempDate.getFullYear() + years);
-      tempDate.setMonth(tempDate.getMonth() + months);
-
-      const remainingMs = expectedDeath.getTime() - tempDate.getTime();
-      const days = Math.floor(remainingMs / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((remainingMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((remainingMs % (1000 * 60)) / 1000);
-
-      setTimeLeft({
-        years: Math.max(0, years),
-        months: Math.max(0, months),
-        days: Math.max(0, days),
-        hours: Math.max(0, hours),
-        minutes: Math.max(0, minutes),
-        seconds: Math.max(0, seconds)
-      });
+      const result = calculateTimeLeft(birthDate, lifeExpectancy);
+      setTimeLeft(result);
     } catch (error) {
       console.error('Time calculation error:', error);
     }
@@ -158,11 +115,11 @@ const App = memo(() => {
   useEffect(() => {
     if (!birthDate) return;
 
-    calculateTimeLeft();
-    const interval = setInterval(calculateTimeLeft, 1000);
+    updateTimeLeft();
+    const interval = setInterval(updateTimeLeft, 1000);
 
     return () => clearInterval(interval);
-  }, [birthDate, calculateTimeLeft]);
+  }, [birthDate, updateTimeLeft]);
 
   // Live dot 펄스 애니메이션 효과
   useEffect(() => {
@@ -343,27 +300,15 @@ const App = memo(() => {
             {/* 부가 정보 - 토스처럼 작게 */}
             <View style={styles.subInfo}>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {(() => {
-                  if (!birthDate || !lifeExpectancy) return '0일';
-                  const birth = new Date(birthDate + 'T00:00:00');
-                  const expectedDeath = new Date(birth);
-                  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
-                  const now = new Date();
-                  const totalDays = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                  return totalDays > 0 ? totalDays.toLocaleString() + t('days') : '0' + t('days');
-                })()}
+                {birthDate && lifeExpectancy
+                  ? calculateTotalDays(birthDate, lifeExpectancy).toLocaleString() + t('days')
+                  : '0' + t('days')}
               </Text>
               <Text style={[styles.subInfoDot, { color: currentTheme.placeholder }]}>•</Text>
               <Text style={[styles.subInfoText, { color: currentTheme.secondaryText }]}>
-                {(() => {
-                  if (!birthDate || !lifeExpectancy) return '0시간';
-                  const birth = new Date(birthDate + 'T00:00:00');
-                  const expectedDeath = new Date(birth);
-                  expectedDeath.setFullYear(birth.getFullYear() + parseInt(lifeExpectancy, 10));
-                  const now = new Date();
-                  const totalHours = Math.floor((expectedDeath.getTime() - now.getTime()) / (1000 * 60 * 60));
-                  return totalHours > 0 ? totalHours.toLocaleString() + t('hours') : '0' + t('hours');
-                })()}
+                {birthDate && lifeExpectancy
+                  ? calculateTotalHours(birthDate, lifeExpectancy).toLocaleString() + t('hours')
+                  : '0' + t('hours')}
               </Text>
             </View>
 
@@ -488,8 +433,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nicknameText: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontSize: typography.headlineLarge,
+    fontWeight: typography.weight.bold,
     letterSpacing: -0.3,
   },
   headerRight: {
@@ -500,7 +445,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   iconText: {
-    fontSize: 22,
+    fontSize: 22, // Icon size, not from typography system
   },
   // 메인 카드 - 토스 스타일
   mainCard: {
@@ -515,38 +460,38 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardTitle: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 16,
+    fontSize: typography.bodyMedium,
+    fontWeight: typography.weight.medium,
+    marginBottom: spacing.md,
     letterSpacing: -0.2,
   },
   mainNumber: {
-    fontSize: 32,
-    fontWeight: '700',
+    fontSize: typography.displayLarge,
+    fontWeight: typography.weight.bold,
     letterSpacing: -1,
-    marginBottom: 20,
+    marginBottom: spacing.lg - 4,
   },
   divider: {
     height: 1,
-    marginVertical: 16,
+    marginVertical: spacing.md,
   },
   subInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
   subInfoText: {
-    fontSize: 14,
-    fontWeight: '400',
+    fontSize: typography.bodyMedium,
+    fontWeight: typography.weight.regular,
   },
   subInfoDot: {
-    fontSize: 12,
+    fontSize: typography.labelSmall,
   },
   liveIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 16,
-    gap: 8,
+    marginTop: spacing.md,
+    gap: spacing.sm,
   },
   liveDot: {
     width: 6,
@@ -554,8 +499,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   liveText: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 13, // Specific size for time display
+    fontWeight: typography.weight.medium,
     fontVariant: ['tabular-nums'],
   },
   // 모달
@@ -569,22 +514,22 @@ const styles = StyleSheet.create({
     width: '80%',
     maxHeight: '70%',
     borderRadius: 20,
-    padding: 24,
+    padding: spacing.lg,
   },
   modalTitle: {
+    ...typography.title,
     fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   languageItem: {
-    padding: 16,
+    padding: spacing.md,
     borderRadius: 8,
-    marginVertical: 4,
+    marginVertical: spacing.xs,
   },
   languageText: {
-    fontSize: 16,
-    fontWeight: '500',
+    ...typography.body,
+    fontWeight: typography.weight.medium,
     textAlign: 'center',
   },
 });
