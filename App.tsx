@@ -15,6 +15,7 @@ import {
   AppState,
   AppStateStatus,
 } from 'react-native';
+import './i18n';
 import { useTranslation } from 'react-i18next';
 import { darkTheme, lightTheme, Theme, typography, spacing } from './themes';
 import ErrorBoundary from './ErrorBoundary';
@@ -26,7 +27,6 @@ import Settings from './components/Settings';
 import { calculateTimeLeft, calculateTotalDays, calculateTotalHours } from './utils/timeCalculator';
 import TimeDisplay from './components/TimeDisplay';
 import { DEFAULT_LIFE_EXPECTANCY } from './constants';
-import './i18n';
 
 const App = memo(() => {
   const { t, i18n } = useTranslation();
